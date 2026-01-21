@@ -110,7 +110,7 @@ const QuestionGenerator = {
     const countSlider = document.createElement('input');
     countSlider.type = 'range';
     countSlider.id = 'q-count';
-    countSlider.min = '5';
+    countSlider.min = '1';
     countSlider.max = '15';
     countSlider.value = '10';
     countGroup.appendChild(countLabel);
@@ -192,23 +192,45 @@ const QuestionGenerator = {
                      values.type === 'technical' ? 'technical skills and problem-solving abilities' :
                      'a mix of behavioral and technical questions';
 
-    return `You are an expert interviewer. Generate interview questions for this role.
+    // For small counts, don't use categories
+    if (values.count <= 3) {
+      return `You are an expert interviewer. Generate EXACTLY ${values.count} interview question${values.count === 1 ? '' : 's'} for this role.
 
 ROLE: ${values.jobTitle}
 KEY REQUIREMENTS: ${values.requirements || 'Not specified - use general best practices for this role'}
 QUESTION TYPE: ${values.type}
-NUMBER OF QUESTIONS: ${values.count}
 
-Generate questions in three categories:
+Generate EXACTLY ${values.count} question${values.count === 1 ? '' : 's'}. No more, no less.
+
+For each question, use this exact format:
+Q: [The question]
+Assesses: [What this question is designed to evaluate]
+
+Make questions specific to the role and requirements provided. Avoid generic questions.
+Focus on ${typeDesc}.`;
+    }
+
+    // For larger counts, use categories
+    const screening = Math.round(values.count * 0.3);
+    const deepDive = Math.round(values.count * 0.5);
+    const redFlag = values.count - screening - deepDive;
+
+    return `You are an expert interviewer. Generate EXACTLY ${values.count} interview questions for this role.
+
+ROLE: ${values.jobTitle}
+KEY REQUIREMENTS: ${values.requirements || 'Not specified - use general best practices for this role'}
+QUESTION TYPE: ${values.type}
+
+Generate EXACTLY ${values.count} questions total, distributed as follows:
 
 ## Screening Questions
-[Quick questions to assess basic fit - about 30% of total]
+Generate exactly ${screening} quick questions to assess basic fit.
 
 ## Deep Dive Questions
-[Detailed questions to assess capabilities - about 50% of total]
+Generate exactly ${deepDive} detailed questions to assess capabilities.
 
 ## Red Flag Questions
-[Questions designed to uncover potential concerns - about 20% of total]
+Generate exactly ${redFlag} questions designed to uncover potential concerns.
 
 For each question, use this exact format:
 Q: [The question]

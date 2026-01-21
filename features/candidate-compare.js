@@ -17,7 +17,24 @@ const CandidateCompare = {
 
   async loadCandidates() {
     this.candidates = await Storage.getSavedCandidates();
+
+    // Restore comparison state if in pop-out mode
+    if (isPoppedOut) {
+      const savedState = await Storage.get('poppedOutCompareState');
+      if (savedState && savedState.selectedIds) {
+        this.selectedIds = new Set(savedState.selectedIds);
+      }
+    }
+
     this.render();
+
+    // Show comparison if it was showing before pop-out
+    if (isPoppedOut) {
+      const savedState = await Storage.get('poppedOutCompareState');
+      if (savedState && savedState.showComparison && this.selectedIds.size >= 2) {
+        this.showComparison();
+      }
+    }
   },
 
   render() {
@@ -49,7 +66,9 @@ const CandidateCompare = {
 
     const body = document.createElement('div');
     body.className = 'card-body';
-    body.style.cssText = 'max-height: 250px; overflow-y: auto;';
+    if (!isPoppedOut) {
+      body.style.cssText = 'max-height: 250px; overflow-y: auto;';
+    }
 
     const listDiv = document.createElement('div');
     listDiv.id = 'candidate-list';
@@ -289,6 +308,10 @@ const CandidateCompare = {
     const body = document.createElement('div');
     body.className = 'card-body';
     body.style.overflowX = 'auto';
+    if (!isPoppedOut) {
+      body.style.maxHeight = '350px';
+      body.style.overflowY = 'auto';
+    }
     body.appendChild(this.buildComparisonTable(selected));
 
     card.appendChild(header);
@@ -302,21 +325,48 @@ const CandidateCompare = {
   buildComparisonTable(candidates) {
     const rows = [
       { label: 'Name', getter: c => c.profileData?.name || 'Unknown' },
+      { label: 'Headline', getter: c => truncate(c.profileData?.headline || '-', 80) },
       { label: 'Current Role', getter: c => c.profileData?.currentRole?.title || '-' },
       { label: 'Company', getter: c => c.profileData?.currentRole?.company || '-' },
       { label: 'Location', getter: c => c.profileData?.location || '-' },
-      { label: 'Education', getter: c => {
-        const edu = c.profileData?.education?.[0];
-        return edu ? ((edu.degree || '') + ' from ' + edu.school).trim() : '-';
+      { label: 'About', getter: c => truncate(c.profileData?.about || '-', 150) },
+      { label: 'Experience', getter: c => {
+        const exp = c.profileData?.experience?.slice(0, 3) || [];
+        return exp.length > 0 ? exp.map(e => `${e.title} at ${e.company || 'Unknown'}`).join('; ') : '-';
       }},
-      { label: 'Top Skills', getter: c => {
-        const skills = c.profileData?.skills?.slice(0, 5) || [];
+      { label: 'Education', getter: c => {
+        const edu = c.profileData?.education || [];
+        return edu.length > 0 ? edu.map(e => `${e.school}${e.degree ? ' (' + e.degree + ')' : ''}`).join('; ') : '-';
+      }},
+      { label: 'Skills', getter: c => {
+        const skills = c.profileData?.skills?.slice(0, 8) || [];
         return skills.length > 0 ? skills.join(', ') : '-';
+      }},
+      { label: 'Certifications', getter: c => {
+        const certs = c.profileData?.certifications?.slice(0, 3) || [];
+        return certs.length > 0 ? certs.join(', ') : '-';
+      }},
+      { label: 'Languages', getter: c => {
+        const langs = c.profileData?.languages || [];
+        return langs.length > 0 ? langs.join(', ') : '-';
+      }},
+      { label: 'Volunteering', getter: c => {
+        const vol = c.profileData?.volunteering?.slice(0, 2) || [];
+        return vol.length > 0 ? vol.map(v => `${v.role} at ${v.organization || 'Unknown'}`).join('; ') : '-';
+      }},
+      { label: 'Honors & Awards', getter: c => {
+        const honors = c.profileData?.honors?.slice(0, 2) || [];
+        return honors.length > 0 ? honors.map(h => h.title).join(', ') : '-';
+      }},
+      { label: 'Organizations', getter: c => {
+        const orgs = c.profileData?.organizations?.slice(0, 2) || [];
+        return orgs.length > 0 ? orgs.map(o => o.name).join(', ') : '-';
       }},
       { label: 'Key Qualifications', getter: c => {
         const quals = parseBulletPoints(c.summary?.['Key Qualifications'] || '');
         return quals.length > 0 ? quals.slice(0, 3).join('; ') : '-';
       }},
+      { label: 'Experience Highlights', getter: c => truncate(c.summary?.['Experience Highlights'] || '-', 150) },
       { label: 'Concerns', getter: c => truncate(c.summary?.['Potential Concerns'] || '-', 100) },
       { label: 'Best Fit For', getter: c => truncate(c.summary?.['Best Fit For'] || '-', 100) }
     ];

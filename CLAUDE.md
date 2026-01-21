@@ -8,11 +8,12 @@ Chrome Extension (Manifest V3) providing AI-powered recruiting features:
 - Candidate Comparison Tool
 - Interview Question Generator
 
-## Architecture
+## Current Architecture
 
 ### Frontend
 - Chrome Extension popup (HTML/CSS/JS)
 - Content script for LinkedIn data extraction
+- Pop-out floating window support
 - No build step required - vanilla JavaScript
 
 ### AI Integration
@@ -22,17 +23,19 @@ Chrome Extension (Manifest V3) providing AI-powered recruiting features:
 
 ### Storage
 - Chrome local storage for:
-  - API key
-  - Saved candidates
+  - API key (`claudeApiKey`)
+  - Saved candidates (`savedCandidates`)
+  - Cached summary (`cachedSummary`)
+  - Pop-out state (`poppedOutTab`, `poppedOutSourceUrl`, `poppedOutCompareState`)
 
 ## Key Components
 
 | Component | Path | Purpose |
 |-----------|------|---------|
 | Manifest | manifest.json | Extension configuration |
-| Popup | popup/*.* | Main UI |
+| Popup | popup/*.* | Main UI with tab navigation |
 | Service Worker | background/service-worker.js | API calls |
-| Content Script | content/linkedin-extractor.js | LinkedIn DOM scraping |
+| Content Script | content/linkedin-extractor.js | LinkedIn text-based extraction |
 | Features | features/*.js | Feature modules |
 | Utilities | utils/*.js | Shared helpers |
 
@@ -41,9 +44,30 @@ Chrome Extension (Manifest V3) providing AI-powered recruiting features:
 1. User clicks extension icon → popup.html loads
 2. User navigates to LinkedIn profile → content script ready
 3. User clicks "Summarize" → popup sends message to content script
-4. Content script extracts DOM data → returns to popup
+4. Content script extracts data via `innerText` parsing → returns to popup
 5. Popup calls Claude API → receives summary
 6. User can save candidate → stored in chrome.storage
+
+## LinkedIn Extraction (2025)
+
+**Critical:** LinkedIn no longer uses semantic IDs for sections. The extractor uses text-based section finding:
+
+```javascript
+// Sections are found by header text, not IDs
+findSectionByHeader('Experience')  // finds section starting with "Experience"
+findSectionByHeader('Education')   // finds section starting with "Education"
+```
+
+**Extracted Fields:**
+- Basic: name, headline, location, profileUrl
+- About section (full text)
+- Experience (title, company, duration)
+- Education (school, degree, field, years)
+- Skills, Certifications, Languages
+- Services, Volunteering, Courses
+- Honors & Awards, Organizations
+
+**Key Insight:** LinkedIn sections have 0 `<li>` elements but use `<div>` elements. All data must be parsed from `innerText`.
 
 ## External Dependencies
 
@@ -62,8 +86,20 @@ User must provide Claude API key via Settings modal. Key is stored in `chrome.st
 
 No build process required.
 
-## Notes
+## Known Limitations
 
-- LinkedIn DOM selectors may break when LinkedIn updates their UI
-- Content script uses multiple fallback selectors for resilience
-- Service worker handles API calls to avoid CORS issues in popup
+- **LinkedIn ToS:** Scraping violates LinkedIn's Terms of Service. Use at your own risk.
+- **DOM Changes:** LinkedIn frequently changes their DOM structure. Extraction may break.
+- **Collapsed Sections:** Content behind "See more" buttons may not be extracted.
+- **Rate Limiting:** Excessive API calls may hit Anthropic rate limits.
+
+## Development History
+
+### January 2025 - Major Refactor
+- Rewrote LinkedIn extractor to use text-based section finding (IDs no longer exist)
+- Added pop-out floating window feature
+- Added summary caching
+- Added comparison state persistence in pop-out
+- Expanded profile data extraction (services, volunteering, courses, honors, organizations)
+- Fixed question generator count slider
+- Made popup responsive to screen size

@@ -11,6 +11,9 @@ let toastContainer;
 let apiKeyInput;
 let apiKeyStatus;
 
+// Track if we're in a popped-out window
+let isPoppedOut = false;
+
 // Initialize on DOM load
 document.addEventListener('DOMContentLoaded', async () => {
   // Cache DOM elements
@@ -21,14 +24,32 @@ document.addEventListener('DOMContentLoaded', async () => {
   apiKeyInput = document.getElementById('api-key-input');
   apiKeyStatus = document.getElementById('api-key-status');
 
+  // Check if we're in a popped-out window
+  isPoppedOut = window.location.search.includes('popout=true');
+  if (isPoppedOut) {
+    document.querySelector('.container').classList.add('popped-out');
+    // Hide pop-out button in popped-out window
+    const popoutBtn = document.getElementById('popout-btn');
+    if (popoutBtn) popoutBtn.style.display = 'none';
+  }
+
   // Setup event listeners
   setupTabNavigation();
   setupSettingsModal();
+  setupPopout();
 
   // Check for API key
   const hasApiKey = await checkApiKey();
   if (!hasApiKey) {
     showToast('Please add your Claude API key to use AI features', 'info');
+  }
+
+  // Restore tab state if popped out
+  if (isPoppedOut) {
+    const savedTab = await Storage.get('poppedOutTab');
+    if (savedTab) {
+      switchTab(savedTab);
+    }
   }
 
   // Initialize the default active tab
@@ -59,6 +80,11 @@ function switchTab(tabId) {
   document.querySelectorAll('.tab-content').forEach(content => {
     content.classList.toggle('active', content.id === `tab-${tabId}`);
   });
+
+  // Save tab state for popped-out window
+  if (isPoppedOut) {
+    Storage.set('poppedOutTab', tabId);
+  }
 
   // Initialize the tab content
   initializeTab(tabId);
@@ -204,6 +230,55 @@ function showToast(message, type = 'info') {
     toast.style.animation = 'toastIn 0.3s ease reverse';
     setTimeout(() => toast.remove(), 300);
   }, 4000);
+}
+
+/**
+ * Pop-out Window
+ */
+function setupPopout() {
+  const popoutBtn = document.getElementById('popout-btn');
+  if (popoutBtn) {
+    popoutBtn.addEventListener('click', openPopoutWindow);
+  }
+}
+
+async function openPopoutWindow() {
+  // Save current tab state
+  const activeTab = document.querySelector('.tab-btn.active');
+  if (activeTab) {
+    await Storage.set('poppedOutTab', activeTab.dataset.tab);
+  }
+
+  // Save the current LinkedIn tab URL for the popped-out window to use
+  const currentTab = await getCurrentTab();
+  if (currentTab?.url) {
+    await Storage.set('poppedOutSourceUrl', currentTab.url.split('?')[0]);
+  }
+
+  // Save comparison state if on compare tab
+  if (typeof CandidateCompare !== 'undefined' && CandidateCompare.selectedIds) {
+    const comparisonResult = document.getElementById('comparison-result');
+    const isShowingComparison = comparisonResult && !comparisonResult.classList.contains('hidden');
+    await Storage.set('poppedOutCompareState', {
+      selectedIds: Array.from(CandidateCompare.selectedIds),
+      showComparison: isShowingComparison
+    });
+  }
+
+  // Get the popup URL
+  const popupUrl = chrome.runtime.getURL('popup/popup.html') + '?popout=true';
+
+  // Create a new window
+  chrome.windows.create({
+    url: popupUrl,
+    type: 'popup',
+    width: 450,
+    height: 700,
+    focused: true
+  });
+
+  // Close the extension popup
+  window.close();
 }
 
 /**

@@ -7,6 +7,8 @@ AI-powered recruiting assistant Chrome extension with LinkedIn profile summaries
 ### 1. LinkedIn Profile Summarizer
 - One-click profile analysis on LinkedIn profile pages
 - AI-generated summaries with key qualifications, experience highlights, concerns, and best fit recommendations
+- Extracts comprehensive profile data: name, headline, location, about, experience, education, skills, certifications, languages, volunteering, honors, and organizations
+- Summary caching - revisit the same profile without re-generating
 - Save profiles for comparison
 - Copy summaries to clipboard
 
@@ -19,14 +21,19 @@ AI-powered recruiting assistant Chrome extension with LinkedIn profile summaries
 ### 3. Candidate Comparison
 - Save multiple candidate profiles
 - Side-by-side comparison table (up to 3 candidates)
-- Compare qualifications, experience, concerns, and fit
+- Compare 18 attributes: name, headline, current role, company, location, about, experience, education, skills, certifications, languages, volunteering, honors, organizations, key qualifications, experience highlights, concerns, and best fit
 
 ### 4. Interview Question Generator
 - Generate role-specific interview questions
 - Choose question types: Behavioral, Technical, or Mixed
-- Adjustable question count (5-15)
-- Questions categorized as Screening, Deep Dive, or Red Flag
+- Adjustable question count (1-15)
+- Questions categorized as Screening, Deep Dive, or Red Flag (for 4+ questions)
 - Copy all questions to clipboard
+
+### 5. Pop-out Window
+- Expand the extension into a full browser window
+- Larger workspace for reviewing candidates and comparisons
+- State persists between popup and pop-out modes
 
 ## Installation
 
@@ -133,6 +140,12 @@ recruiting-tool/
 
 - Google Chrome browser
 - Claude API key from Anthropic
+
+## Known Limitations
+
+- **LinkedIn DOM Changes**: LinkedIn frequently updates their page structure. The extension uses text-based section finding (parsing `innerText`) rather than relying on CSS selectors or IDs, which provides resilience but may occasionally miss data if LinkedIn significantly changes section headers.
+- **LinkedIn Terms of Service**: Automated data extraction may violate LinkedIn's ToS. Use responsibly and at your own risk.
+- **Profile Visibility**: The extension can only extract data visible on the page. Limited profiles or sections hidden behind "Show more" buttons may not be fully captured.
 
 ## License
 

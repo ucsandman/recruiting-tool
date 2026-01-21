@@ -16,6 +16,9 @@ const ProfileSummarizer = {
     if (!this.initialized) {
       this.render();
       this.initialized = true;
+    } else {
+      // Re-check for cached summary when tab is re-selected
+      this.loadCachedSummary();
     }
   },
 
@@ -53,6 +56,36 @@ const ProfileSummarizer = {
     this.checkPage();
   },
 
+  async loadCachedSummary() {
+    // In pop-out mode, use the saved source URL instead of current tab
+    let currentUrl;
+    if (isPoppedOut) {
+      currentUrl = await Storage.get('poppedOutSourceUrl');
+    } else {
+      const tab = await getCurrentTab();
+      currentUrl = tab.url?.split('?')[0];
+    }
+
+    const cached = await Storage.get('cachedSummary');
+
+    if (cached && cached.profileUrl === currentUrl) {
+      this.currentProfile = cached.profileData;
+      this.currentSummary = cached.summary;
+      this.displaySummary();
+    }
+  },
+
+  async cacheSummary() {
+    if (this.currentProfile && this.currentSummary) {
+      await Storage.set('cachedSummary', {
+        profileUrl: this.currentProfile.profileUrl,
+        profileData: this.currentProfile,
+        summary: this.currentSummary,
+        cachedAt: Date.now()
+      });
+    }
+  },
+
   bindEvents() {
     const summarizeBtn = document.getElementById('summarize-btn');
     summarizeBtn?.addEventListener('click', () => this.summarizeProfile());
@@ -61,6 +94,35 @@ const ProfileSummarizer = {
   async checkPage() {
     const statusEl = document.getElementById('summarize-status');
     const summarizeBtn = document.getElementById('summarize-btn');
+
+    // In pop-out mode, just try to load cached summary
+    if (isPoppedOut) {
+      const cached = await Storage.get('cachedSummary');
+      const sourceUrl = await Storage.get('poppedOutSourceUrl');
+
+      if (cached && cached.profileUrl === sourceUrl) {
+        statusEl.textContent = '';
+        const infoDiv = document.createElement('div');
+        infoDiv.style.cssText = 'display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--text-muted);';
+        infoDiv.textContent = 'Viewing cached summary';
+        statusEl.appendChild(infoDiv);
+        summarizeBtn.style.display = 'none'; // Can't summarize new profiles in pop-out
+        await this.loadCachedSummary();
+      } else {
+        statusEl.textContent = '';
+        const emptyState = document.createElement('div');
+        emptyState.className = 'empty-state';
+        const h3 = document.createElement('h3');
+        h3.textContent = 'No Summary Available';
+        const p = document.createElement('p');
+        p.textContent = 'Summarize a profile from the extension popup first';
+        emptyState.appendChild(h3);
+        emptyState.appendChild(p);
+        statusEl.appendChild(emptyState);
+        summarizeBtn.style.display = 'none';
+      }
+      return;
+    }
 
     const isProfile = await isLinkedInProfile();
 
@@ -71,6 +133,9 @@ const ProfileSummarizer = {
       successDiv.textContent = 'LinkedIn profile detected';
       statusEl.appendChild(successDiv);
       summarizeBtn.disabled = false;
+
+      // Check for cached summary for this profile
+      await this.loadCachedSummary();
     } else {
       statusEl.textContent = '';
       const emptyState = document.createElement('div');
@@ -112,6 +177,9 @@ const ProfileSummarizer = {
       this.currentSummary = parseClaudeResponse(summaryText);
       this.currentSummary.raw = summaryText;
 
+      // Cache the summary
+      await this.cacheSummary();
+
       this.displaySummary();
 
     } catch (error) {
@@ -129,6 +197,18 @@ const ProfileSummarizer = {
     const education = profile.education?.map(e =>
       `${e.degree || ''} ${e.field || ''} from ${e.school} (${e.years || 'N/A'})`
     ).join('\n') || 'Not available';
+
+    const certifications = profile.certifications?.join(', ') || 'None listed';
+
+    const volunteering = profile.volunteering?.map(v =>
+      `${v.role} at ${v.organization || 'Unknown'}`
+    ).join(', ') || 'None listed';
+
+    const honors = profile.honors?.map(h => h.title).join(', ') || 'None listed';
+
+    const organizations = profile.organizations?.map(o =>
+      `${o.name}${o.role ? ' (' + o.role + ')' : ''}`
+    ).join(', ') || 'None listed';
 
     return `You are an expert recruiter assistant. Analyze this LinkedIn profile and provide a concise, actionable summary.
 
@@ -149,6 +229,16 @@ ${education}
 
 Skills: ${profile.skills?.join(', ') || 'Not available'}
 
+Certifications: ${certifications}
+
+Volunteering: ${volunteering}
+
+Honors & Awards: ${honors}
+
+Organizations: ${organizations}
+
+Services Offered: ${profile.services?.join(', ') || 'None listed'}
+
 Provide your analysis in this exact format:
 
 ## Key Qualifications
@@ -167,6 +257,7 @@ Provide your analysis in this exact format:
   displaySummary() {
     const resultEl = document.getElementById('summary-result');
     const summary = this.currentSummary;
+    const profile = this.currentProfile;
 
     const qualifications = parseBulletPoints(summary['Key Qualifications'] || '');
     const highlights = summary['Experience Highlights'] || '';
@@ -175,17 +266,124 @@ Provide your analysis in this exact format:
 
     resultEl.textContent = '';
 
-    const card = document.createElement('div');
-    card.className = 'card';
+    // Profile Info Card
+    const profileCard = document.createElement('div');
+    profileCard.className = 'card mb-4';
 
-    const header = document.createElement('div');
-    header.className = 'card-header';
-    const headerStrong = document.createElement('strong');
-    headerStrong.textContent = this.currentProfile.name || 'Profile Summary';
-    header.appendChild(headerStrong);
+    const profileHeader = document.createElement('div');
+    profileHeader.className = 'card-header';
+    const profileTitle = document.createElement('strong');
+    profileTitle.textContent = profile.name || 'Profile';
+    profileHeader.appendChild(profileTitle);
 
-    const body = document.createElement('div');
-    body.className = 'card-body';
+    const profileBody = document.createElement('div');
+    profileBody.className = 'card-body';
+
+    // Basic Info
+    if (profile.headline) {
+      const headlineP = document.createElement('p');
+      headlineP.style.cssText = 'font-weight: 500; margin-bottom: 4px;';
+      headlineP.textContent = profile.headline;
+      profileBody.appendChild(headlineP);
+    }
+    if (profile.location) {
+      const locationP = document.createElement('p');
+      locationP.className = 'text-muted text-sm';
+      locationP.textContent = profile.location;
+      profileBody.appendChild(locationP);
+    }
+
+    // About Section
+    if (profile.about) {
+      const aboutSection = this.createCollapsibleSection('About', profile.about);
+      profileBody.appendChild(aboutSection);
+    }
+
+    // Experience Section
+    if (profile.experience?.length > 0) {
+      const expContent = profile.experience.map(e =>
+        `<strong>${e.title}</strong> at ${e.company || 'Unknown'}${e.duration ? ' (' + e.duration + ')' : ''}`
+      ).join('<br>');
+      const expSection = this.createCollapsibleSection('Experience', expContent, true);
+      profileBody.appendChild(expSection);
+    }
+
+    // Education Section
+    if (profile.education?.length > 0) {
+      const eduContent = profile.education.map(e =>
+        `<strong>${e.school}</strong>${e.degree ? ' - ' + e.degree : ''}${e.field ? ', ' + e.field : ''}${e.years ? ' (' + e.years + ')' : ''}`
+      ).join('<br>');
+      const eduSection = this.createCollapsibleSection('Education', eduContent, true);
+      profileBody.appendChild(eduSection);
+    }
+
+    // Skills Section
+    if (profile.skills?.length > 0) {
+      const skillsSection = this.createCollapsibleSection('Skills', profile.skills.join(', '));
+      profileBody.appendChild(skillsSection);
+    }
+
+    // Certifications Section
+    if (profile.certifications?.length > 0) {
+      const certSection = this.createCollapsibleSection('Certifications', profile.certifications.join(', '));
+      profileBody.appendChild(certSection);
+    }
+
+    // Services Section
+    if (profile.services?.length > 0) {
+      const servSection = this.createCollapsibleSection('Services', profile.services.join(', '));
+      profileBody.appendChild(servSection);
+    }
+
+    // Volunteering Section
+    if (profile.volunteering?.length > 0) {
+      const volContent = profile.volunteering.map(v =>
+        `${v.role} at ${v.organization || 'Unknown'}${v.duration ? ' (' + v.duration + ')' : ''}`
+      ).join('<br>');
+      const volSection = this.createCollapsibleSection('Volunteering', volContent, true);
+      profileBody.appendChild(volSection);
+    }
+
+    // Honors Section
+    if (profile.honors?.length > 0) {
+      const honContent = profile.honors.map(h =>
+        `${h.title}${h.issuer ? ' - ' + h.issuer : ''}`
+      ).join('<br>');
+      const honSection = this.createCollapsibleSection('Honors & Awards', honContent, true);
+      profileBody.appendChild(honSection);
+    }
+
+    // Organizations Section
+    if (profile.organizations?.length > 0) {
+      const orgContent = profile.organizations.map(o =>
+        `${o.name}${o.role ? ' (' + o.role + ')' : ''}`
+      ).join('<br>');
+      const orgSection = this.createCollapsibleSection('Organizations', orgContent, true);
+      profileBody.appendChild(orgSection);
+    }
+
+    // Languages Section
+    if (profile.languages?.length > 0) {
+      const langSection = this.createCollapsibleSection('Languages', profile.languages.join(', '));
+      profileBody.appendChild(langSection);
+    }
+
+    profileCard.appendChild(profileHeader);
+    profileCard.appendChild(profileBody);
+    resultEl.appendChild(profileCard);
+
+    // AI Analysis Card
+    const analysisCard = document.createElement('div');
+    analysisCard.className = 'card';
+
+    const analysisHeader = document.createElement('div');
+    analysisHeader.className = 'card-header';
+    const analysisTitle = document.createElement('strong');
+    analysisTitle.textContent = 'AI Analysis';
+    analysisHeader.appendChild(analysisTitle);
+
+    const analysisBody = document.createElement('div');
+    analysisBody.className = 'card-body';
 
     // Key Qualifications
     const qualSection = document.createElement('div');
@@ -200,7 +398,7 @@ Provide your analysis in this exact format:
       qualUl.appendChild(li);
     });
     qualSection.appendChild(qualUl);
-    body.appendChild(qualSection);
+    analysisBody.appendChild(qualSection);
 
     // Experience Highlights
     const expSection = document.createElement('div');
@@ -211,7 +409,7 @@ Provide your analysis in this exact format:
     const expP = document.createElement('p');
     expP.textContent = highlights;
     expSection.appendChild(expP);
-    body.appendChild(expSection);
+    analysisBody.appendChild(expSection);
 
     // Potential Concerns
     const conSection = document.createElement('div');
@@ -222,7 +420,7 @@ Provide your analysis in this exact format:
     const conP = document.createElement('p');
     conP.textContent = concerns;
     conSection.appendChild(conP);
-    body.appendChild(conSection);
+    analysisBody.appendChild(conSection);
 
     // Best Fit For
     const fitSection = document.createElement('div');
@@ -233,7 +431,7 @@ Provide your analysis in this exact format:
     const fitP = document.createElement('p');
     fitP.textContent = bestFit;
     fitSection.appendChild(fitP);
-    body.appendChild(fitSection);
+    analysisBody.appendChild(fitSection);
 
     const footer = document.createElement('div');
     footer.className = 'card-footer';
@@ -253,12 +451,57 @@ Provide your analysis in this exact format:
     footer.appendChild(copyBtn);
     footer.appendChild(saveBtn);
 
-    card.appendChild(header);
-    card.appendChild(body);
-    card.appendChild(footer);
-    resultEl.appendChild(card);
+    analysisCard.appendChild(analysisHeader);
+    analysisCard.appendChild(analysisBody);
+    analysisCard.appendChild(footer);
+    resultEl.appendChild(analysisCard);
 
     resultEl.classList.remove('hidden');
+  },
+
+  createCollapsibleSection(title, content, isHtml = false) {
+    const section = document.createElement('div');
+    section.className = 'summary-section collapsible-section';
+    section.style.cssText = 'border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px;';
+
+    const header = document.createElement('div');
+    header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; cursor: pointer;';
+    header.addEventListener('click', () => {
+      const contentEl = section.querySelector('.section-content');
+      const arrow = section.querySelector('.arrow');
+      if (contentEl.style.display === 'none') {
+        contentEl.style.display = 'block';
+        arrow.textContent = '\u25BC';
+      } else {
+        contentEl.style.display = 'none';
+        arrow.textContent = '\u25B6';
+      }
+    });
+
+    const h3 = document.createElement('h3');
+    h3.style.margin = '0';
+    h3.textContent = title;
+
+    const arrow = document.createElement('span');
+    arrow.className = 'arrow';
+    arrow.style.cssText = 'font-size: 10px; color: var(--text-muted);';
+    arrow.textContent = '\u25BC';
+
+    header.appendChild(h3);
+    header.appendChild(arrow);
+    section.appendChild(header);
+
+    const contentEl = document.createElement('div');
+    contentEl.className = 'section-content';
+    contentEl.style.cssText = 'margin-top: 8px; font-size: 13px; line-height: 1.6;';
+    if (isHtml) {
+      contentEl.innerHTML = content;
+    } else {
+      contentEl.textContent = content;
+    }
+    section.appendChild(contentEl);
+
+    return section;
   },
 
   async copySummary() {

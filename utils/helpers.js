@@ -94,29 +94,52 @@ function parseQuestions(text) {
 
   for (const line of lines) {
     const trimmed = line.trim();
+    if (!trimmed) continue;
 
     // Check for category headers
-    if (trimmed.startsWith('## ')) {
-      currentCategory = trimmed.replace('## ', '').replace(' Questions', '');
+    if (trimmed.startsWith('## ') || trimmed.startsWith('### ')) {
+      currentCategory = trimmed.replace(/^#+ /, '').replace(' Questions', '');
       continue;
     }
 
-    // Check for question
-    if (trimmed.startsWith('Q:')) {
-      if (currentQuestion) {
-        questions.push(currentQuestion);
-      }
+    // Check for question - multiple formats
+    // Q: format (with or without bold markdown)
+    if (trimmed.startsWith('Q:') || trimmed.startsWith('**Q:**')) {
+      if (currentQuestion) questions.push(currentQuestion);
       currentQuestion = {
-        question: trimmed.replace('Q:', '').trim(),
+        question: trimmed.replace(/^\*?\*?Q:\*?\*?\s*/, '').trim(),
         category: currentCategory,
         assesses: ''
       };
       continue;
     }
 
-    // Check for assessment
-    if (trimmed.startsWith('Assesses:') && currentQuestion) {
-      currentQuestion.assesses = trimmed.replace('Assesses:', '').trim();
+    // Numbered format: 1. or 1)
+    const numberedMatch = trimmed.match(/^\d+[\.\)]\s*(.+)/);
+    if (numberedMatch && trimmed.endsWith('?')) {
+      if (currentQuestion) questions.push(currentQuestion);
+      currentQuestion = {
+        question: numberedMatch[1].trim(),
+        category: currentCategory,
+        assesses: ''
+      };
+      continue;
+    }
+
+    // Bullet format with question
+    if ((trimmed.startsWith('- ') || trimmed.startsWith('* ')) && trimmed.endsWith('?')) {
+      if (currentQuestion) questions.push(currentQuestion);
+      currentQuestion = {
+        question: trimmed.replace(/^[-*]\s*/, '').trim(),
+        category: currentCategory,
+        assesses: ''
+      };
+      continue;
+    }
+
+    // Check for assessment (handles **Assesses:** format)
+    if (currentQuestion && (trimmed.startsWith('Assesses:') || trimmed.startsWith('*Assesses') || trimmed.startsWith('**Assesses'))) {
+      currentQuestion.assesses = trimmed.replace(/^\*?\*?Assesses:?\*?\*?\s*/, '').trim();
     }
   }
 

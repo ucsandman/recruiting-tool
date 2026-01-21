@@ -37,12 +37,50 @@ body {
 
 /* Container */
 .container {
-  width: 400px;
+  width: 100%;
+  max-width: 400px;
+  min-width: 280px;
   min-height: 500px;
   max-height: 600px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* Popped out window styles */
+.container.popped-out {
+  width: 100%;
+  max-width: none;
+  height: 100vh;
+  max-height: none;
+}
+
+.container.popped-out .content {
+  flex: 1;
+  max-height: none;
+}
+
+/* Popped out candidate list and comparison table */
+.container.popped-out #candidate-list {
+  max-height: none;
+}
+
+.container.popped-out .card-body {
+  max-height: none;
+}
+
+.container.popped-out #compare-container .card-body {
+  max-height: calc(100vh - 300px);
+  overflow-y: auto;
+}
+
+.container.popped-out .comparison-table {
+  min-width: 100%;
+}
+
+.container.popped-out .comparison-table td,
+.container.popped-out .comparison-table th {
+  padding: 12px 10px;
 }
 
 /* Header */
@@ -59,6 +97,11 @@ body {
   font-size: 16px;
   font-weight: 600;
   color: var(--primary);
+}
+
+.header-actions {
+  display: flex;
+  gap: 4px;
 }
 
 /* Icon Button */

@@ -1,0 +1,45 @@
+● [Context: ~52% used]
+
+  Good question - you should know the risks:
+
+  LinkedIn's Terms of Service
+
+  Technically, no. LinkedIn's https://www.linkedin.com/legal/user-agreement prohibits:
+  - Using bots, scrapers, or automated tools to access their services
+  - Copying data obtained through their platform without permission
+
+  This extension extracts data from the DOM, which falls under "automated data collection."
+
+  Practical Reality
+  ┌───────────────────┬─────────────────────────────────────────────────────┐
+  │      Factor       │                     Assessment                      │
+  ├───────────────────┼─────────────────────────────────────────────────────┤
+  │ Risk level        │ Low for personal use                                │
+  ├───────────────────┼─────────────────────────────────────────────────────┤
+  │ What you're doing │ Viewing profiles you already have access to         │
+  ├───────────────────┼─────────────────────────────────────────────────────┤
+  │ Not doing         │ Bulk scraping, selling data, mass harvesting        │
+  ├───────────────────┼─────────────────────────────────────────────────────┤
+  │ Common practice   │ Many recruiting tools (paid ones) do similar things │
+  └───────────────────┴─────────────────────────────────────────────────────┘
+  Potential Consequences
+
+  - LinkedIn could restrict or ban your account if they detect automation
+  - Detection is unlikely for occasional manual use (you click a button on profiles you're viewing)
+  - More likely to be flagged if you summarize hundreds of profiles rapidly
+
+  The Gray Area
+
+  The 2022 hiQ Labs v. LinkedIn ruling established that scraping public data isn't necessarily
+  illegal, but:
+  - You're accessing as a logged-in user (different rules)
+  - ToS violation ≠ criminal, but LinkedIn can enforce it
+
+  My Recommendation
+
+  Use at your own discretion. If you're concerned:
+  - Use the Boolean Search Builder and Question Generator (no scraping involved)
+  - Manually copy/paste profile info instead of auto-extracting
+  - Consider official tools like LinkedIn Recruiter
+
+  It's your call whether the convenience is worth the (small) risk.
