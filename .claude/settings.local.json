@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"C:\\\\Projects\\\\recruiting-tool\")",
+      "Bash(node scripts/generate-icons.js:*)"
+    ]
+  }
+}
