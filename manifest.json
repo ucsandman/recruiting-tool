@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Recruiter Toolkit",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "AI-powered recruiting assistant with LinkedIn profile summaries, boolean search builder, candidate comparison, and interview question generation.",
   "permissions": [
     "activeTab",
