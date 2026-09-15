@@ -6,11 +6,11 @@ const path = require('node:path');
 // The extension must never issue requests to LinkedIn or synthesize
 // interaction with LinkedIn's UI. See the spec's ban-safety invariant.
 const FORBIDDEN = [
-  { name: 'network call', pattern: /\bfetch\s*\(/ },
+  { name: 'network call', pattern: /\bfetch\s*\(|(?:window|globalThis)\s*\[\s*["']fetch["']\s*\]/ },
   { name: 'XMLHttpRequest', pattern: /\bXMLHttpRequest\b/ },
-  { name: 'synthetic click', pattern: /\.click\s*\(/ },
-  { name: 'synthetic submit', pattern: /\.submit\s*\(/ },
-  { name: 'synthetic event', pattern: /\bdispatchEvent\s*\(/ },
+  { name: 'synthetic click', pattern: /\.click\s*\(|\[\s*["']click["']\s*\]/ },
+  { name: 'synthetic submit', pattern: /\.submit\s*\(|\[\s*["']submit["']\s*\]/ },
+  { name: 'synthetic event', pattern: /\bdispatchEvent\s*\(|\[\s*["']dispatchEvent["']\s*\]/ },
   { name: 'polling timer', pattern: /\bsetInterval\s*\(/ }
 ];
 
@@ -23,14 +23,17 @@ test('content scripts contain no forbidden automation patterns', () => {
   const violations = [];
   for (const file of files) {
     const source = fs.readFileSync(path.join(CONTENT_DIR, file), 'utf8');
-    source.split('\n').forEach((line, i) => {
-      if (line.trim().startsWith('//')) return;
-      for (const rule of FORBIDDEN) {
-        if (rule.pattern.test(line)) {
-          violations.push(`${file}:${i + 1} ${rule.name} -> ${line.trim()}`);
-        }
+    const lines = source.split('\n');
+    for (const rule of FORBIDDEN) {
+      const globalPattern = new RegExp(rule.pattern.source, 'g');
+      let match;
+      while ((match = globalPattern.exec(source)) !== null) {
+        const lineNumber = source.slice(0, match.index).split('\n').length;
+        const lineText = lines[lineNumber - 1];
+        if (lineText.trim().startsWith('//')) continue;
+        violations.push(`${file}:${lineNumber} ${rule.name} -> ${lineText.trim()}`);
       }
-    });
+    }
   }
 
   assert.deepStrictEqual(
