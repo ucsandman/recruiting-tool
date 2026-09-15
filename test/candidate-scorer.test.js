@@ -312,12 +312,16 @@ test('a verified met plus a fabricated duplicate keeps the verified met with its
   assert.strictEqual(cr1.evidence, 'Built systems in Go for six years.');
 });
 
-test('a verified met plus a verified unmet still collapses to unknown', () => {
+test('two verified lines that disagree collapse to unknown', () => {
+  // Both quotes genuinely occur in CANDIDATE's own profile text (the about
+  // sentence, and "Backend Engineer" from the experience title / headline),
+  // so this is a real disagreement between two verified lines - not one
+  // line failing verification and being discarded.
   const raw = JSON.stringify([{
     candidateId: 'c1',
     lines: [
       { criterionId: 'cr_1', verdict: 'met', evidence: 'Built systems in Go for six years.' },
-      { criterionId: 'cr_1', verdict: 'unmet', evidence: 'Explicitly says junior level only' }
+      { criterionId: 'cr_1', verdict: 'unmet', evidence: 'Backend Engineer' }
     ]
   }]);
   const [score] = CandidateScorer.parseResponse(raw, SCORECARD, [CANDIDATE]);
