@@ -5,3 +5,6 @@ dist/
 __pycache__/
 *.pyc
 .venv/
+
+# Recruiter DOM captures - contains real candidate PII, never commit
+dom-samples/
