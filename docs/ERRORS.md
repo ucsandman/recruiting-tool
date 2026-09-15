@@ -3,6 +3,29 @@
 Things that broke or were gotten wrong, so the next session does not pay for them again.
 Newest first.
 
+## 2026-09-15 - Dead code triaged as "mention, do not remove" cost a user a confusing error
+
+**Symptom:** clicking Summarize on a LinkedIn tab that predated an extension reload showed
+Chrome's raw message: "Could not establish connection. Receiving end does not exist."
+
+**Root cause:** the friendly version of that exact error -
+"Could not communicate with LinkedIn page. Please refresh the page and try again." - already
+existed in `background/service-worker.js`. But nothing calls that file. Every feature
+messages the tab directly with `chrome.tabs.sendMessage`.
+
+**The part worth remembering:** a code review flagged that service worker as unreachable
+dead code during the build. It was triaged as pre-existing and out of scope - "mention, do
+not remove" - and logged as a deferred minor. That triage was defensible for the code, but
+it missed that the dead file was the ONLY place a needed user-facing behaviour lived. An
+hour later a real user hit the raw error.
+
+**Fix:** `extractProfileFromTab()` in `utils/helpers.js` wraps the send and translates the
+messaging error into the action that resolves it.
+
+**Lesson:** when marking code unreachable, check whether anything in it is the only
+implementation of a behaviour the live path still needs. "Dead" and "redundant" are not the
+same thing, and a review that identifies the first should be asked about the second.
+
 ## 2026-09-15 — 99 passing tests, and the headline feature did not work at all
 
 **Symptom:** open-to-work detection failed on every real profile that had the badge set.

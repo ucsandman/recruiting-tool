@@ -1,6 +1,6 @@
 # Recruiter Toolkit - Chrome Extension
 
-AI-powered recruiting assistant Chrome extension with LinkedIn profile summaries, role scorecards, evidence-cited candidate scoring, boolean search builder, candidate comparison, and interview question generation.
+AI-powered recruiting assistant Chrome extension with LinkedIn profile summaries, role scorecards, evidence-cited candidate scoring, boolean search builder, candidate comparison, and interview question generation. Runs on either Anthropic or OpenAI.
 
 ## Features
 
@@ -80,12 +80,18 @@ AI-powered recruiting assistant Chrome extension with LinkedIn profile summaries
 ### Configuration
 
 1. Click the extension icon to open the popup
-
 2. Click the gear icon in the top-right corner
+3. Choose a provider — **Anthropic** or **OpenAI**. Anthropic is the default.
+4. Paste the matching API key:
+   - Anthropic: [console.anthropic.com](https://console.anthropic.com/)
+   - OpenAI: [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+5. On OpenAI, click **Load models** and pick one from the dropdown
+6. Click Save
 
-3. Enter your Claude API key (obtain from [Anthropic Console](https://console.anthropic.com/))
-
-4. Click Save
+**No OpenAI model id is hardcoded anywhere in this repo.** The dropdown is populated from
+`GET /v1/models` using your own key, so it always reflects what your account can actually
+run and never goes stale. If no model has been chosen, the AI features refuse with a clear
+message rather than falling back to a guessed name.
 
 ## Usage
 
@@ -122,12 +128,12 @@ AI-powered recruiting assistant Chrome extension with LinkedIn profile summaries
 ## Technical Details
 
 - **Manifest Version:** 3 (modern Chrome extension format)
-- **AI Model:** `claude-sonnet-5` via Anthropic API
+- **AI Providers:** Anthropic (default, `claude-sonnet-5`) or OpenAI (model chosen by the user from their own account's model list)
 - **Storage:** Chrome local storage (no external database)
 - **Permissions:** activeTab, storage, tabs
 - **Tests:** 92 unit tests, `npm test` (Node's built-in `node:test`, no dependencies)
 - **Build step:** none
-- **Host Permissions:** linkedin.com, api.anthropic.com
+- **Host Permissions:** linkedin.com, api.anthropic.com, api.openai.com
 
 ## Project Structure
 
@@ -143,7 +149,8 @@ recruiting-tool/
 ├── background/
 │   └── service-worker.js  # Background worker
 ├── lib/
-│   └── claude-api.js      # Claude API wrapper
+│   ├── claude-api.js      # Anthropic request builder
+│   └── ai-provider.js     # Provider dispatch: Anthropic or OpenAI
 ├── features/
 │   ├── profile-summarizer.js
 │   ├── scorecard.js       # Role rubrics + Scorecards tab UI
@@ -191,14 +198,14 @@ expanding it would require a synthetic click. Expand it yourself if you want it 
 ## Privacy & Security
 
 - API keys are stored locally in Chrome storage
-- No data is sent to external servers except Anthropic's API
+- No data is sent to external servers except the AI provider you selected
 - LinkedIn profile data is only extracted when you click "Summarize"
 - Saved candidates are stored locally on your device
 
 ## Requirements
 
-- Google Chrome browser
-- Claude API key from Anthropic
+- A Chromium browser — Chrome, Brave or Edge
+- An API key from **either** Anthropic or OpenAI (not both)
 
 ## Known Limitations
 

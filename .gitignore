@@ -11,3 +11,4 @@ dom-samples/
 linkedinfiles.zip
 *.zip
 preview.local.html
+.claude/settings.local.json

@@ -2,6 +2,25 @@
 
 Durable architecture and product decisions, newest first.
 
+## 2026-09-15 - Provider is selectable, and no OpenAI model id is hardcoded
+
+**Decision:** `lib/ai-provider.js` dispatches to Anthropic or OpenAI based on a stored
+setting. Anthropic stays the default. For OpenAI the model is NOT hardcoded - Settings
+calls `GET /v1/models` with the user's own key and populates a dropdown from the result.
+With no model chosen, the AI features refuse with a clear message rather than guessing.
+
+**Why:** model names go stale fast, and a wrong hardcoded default fails in a way the user
+cannot diagnose. Asking the account is authoritative and self-maintaining. When this was
+built, a web search returned model ids that could not be confirmed - the user's own key
+later returned `gpt-5.6-terra`, which no amount of guessing would have produced.
+
+**Also:** no token cap is sent to OpenAI. Newer models moved from `max_tokens` to
+`max_completion_tokens`, and sending neither sidesteps the incompatibility.
+
+**Why CORS is not a problem:** an MV3 extension with a host permission for a domain is
+exempt from CORS on that domain, which is why `https://api.openai.com/*` in
+`host_permissions` is the whole story.
+
 ## 2026-09-15 — The extension never automates LinkedIn
 
 **Decision:** content scripts read only DOM already rendered on a page the user
