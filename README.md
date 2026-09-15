@@ -1,6 +1,6 @@
 # Recruiter Toolkit - Chrome Extension
 
-AI-powered recruiting assistant Chrome extension with LinkedIn profile summaries, boolean search builder, candidate comparison, and interview question generation.
+AI-powered recruiting assistant Chrome extension with LinkedIn profile summaries, role scorecards, evidence-cited candidate scoring, boolean search builder, candidate comparison, and interview question generation.
 
 ## Features
 
@@ -30,7 +30,33 @@ AI-powered recruiting assistant Chrome extension with LinkedIn profile summaries
 - Questions categorized as Screening, Deep Dive, or Red Flag (for 4+ questions)
 - Copy all questions to clipboard
 
-### 5. Pop-out Window
+### 5. Role Scorecards
+- Paste a job description and Claude drafts a screening rubric from it
+- Must-haves, nice-to-haves and dealbreakers, each with an adjustable weight (1-3)
+- You must review and save a rubric before it can score anyone - auto-drafted rubrics
+  over-weight job-description boilerplate, so the edit step is required, not optional
+- Scorecards persist locally and are reusable across candidates
+
+### 6. Candidate Scoring
+- Score the profile you are viewing against any saved scorecard
+- Per-criterion verdicts: met, unmet, or unknown
+- **Every `met` cites verbatim profile text, and that quote is verified to actually
+  appear in the profile** - a fabricated citation is rejected, not displayed
+- A missing mention scores `unknown`, never `unmet`. LinkedIn profiles omit things, and
+  treating an omission as a failure silently buries qualified people
+- `unknown` is excluded from the score denominator, so a sparse profile reads as
+  low-confidence rather than low-quality
+- If no must-have could be decided, the result says "Not enough detail to score" rather
+  than reporting a percentage
+- Dealbreakers are reported separately and never folded into the percentage
+
+### 7. Movability Signals
+- Tenure band computed locally from the profile (just started / settling in / prime to
+  move / long tenure), with no AI call
+- Open-to-work detection with provenance, so you know whether it came from the public
+  badge or a recruiter-only signal
+
+### 8. Pop-out Window
 - Expand the extension into a full browser window
 - Larger workspace for reviewing candidates and comparisons
 - State persists between popup and pop-out modes
@@ -96,9 +122,11 @@ AI-powered recruiting assistant Chrome extension with LinkedIn profile summaries
 ## Technical Details
 
 - **Manifest Version:** 3 (modern Chrome extension format)
-- **AI Model:** Claude Sonnet 4 via Anthropic API
+- **AI Model:** `claude-sonnet-5` via Anthropic API
 - **Storage:** Chrome local storage (no external database)
 - **Permissions:** activeTab, storage, tabs
+- **Tests:** 92 unit tests, `npm test` (Node's built-in `node:test`, no dependencies)
+- **Build step:** none
 - **Host Permissions:** linkedin.com, api.anthropic.com
 
 ## Project Structure
@@ -118,16 +146,47 @@ recruiting-tool/
 │   └── claude-api.js      # Claude API wrapper
 ├── features/
 │   ├── profile-summarizer.js
+│   ├── scorecard.js       # Role rubrics + Scorecards tab UI
+│   ├── candidate-scorer.js # Prompt building + defensive response parsing
 │   ├── boolean-builder.js
 │   ├── candidate-compare.js
 │   └── question-generator.js
 ├── utils/
 │   ├── storage.js         # Chrome storage wrapper
+│   ├── signals.js         # Tenure, bands, open-to-work, role diffs (pure, tested)
 │   └── helpers.js         # Utility functions
+├── test/                  # 92 unit tests, run with `npm test`
 ├── icons/                 # Extension icons
 └── scripts/
     └── generate-icons.js  # Icon generator
 ```
+
+## Testing
+
+```bash
+npm test
+```
+
+92 unit tests using Node's built-in test runner. No dependencies, no build step.
+
+One test is a safety guard rather than a feature test: `test/ban-safety.test.js` scans
+every file listed in `manifest.json`'s `content_scripts` and fails the build if any of
+them contains `fetch(`, `XMLHttpRequest`, `.click(`, `.submit(`, `dispatchEvent` or
+`setInterval` - including multi-line and bracket-access forms. See the design rule below.
+
+## Design rule: the extension never automates LinkedIn
+
+The extension reads only DOM that is already rendered on a page you navigated to
+yourself. It issues zero requests to linkedin.com and performs zero synthetic
+interaction with LinkedIn's UI - no background fetching, no auto-pagination, no
+scripted clicks, no polling timers.
+
+This is deliberate. LinkedIn's automation detection is largely network- and
+timing-based, and a Recruiter seat is expensive to lose. The rule costs almost nothing,
+because the page you are looking at already contains the data.
+
+The trade-off: content hidden behind a "See more" button is not extracted, because
+expanding it would require a synthetic click. Expand it yourself if you want it read.
 
 ## Privacy & Security
 
@@ -145,7 +204,9 @@ recruiting-tool/
 
 - **LinkedIn DOM Changes**: LinkedIn frequently updates their page structure. The extension uses text-based section finding (parsing `innerText`) rather than relying on CSS selectors or IDs, which provides resilience but may occasionally miss data if LinkedIn significantly changes section headers.
 - **LinkedIn Terms of Service**: Automated data extraction may violate LinkedIn's ToS. Use responsibly and at your own risk.
-- **Profile Visibility**: The extension can only extract data visible on the page. Limited profiles or sections hidden behind "Show more" buttons may not be fully captured.
+- **Profile Visibility**: The extension can only extract data visible on the page. Limited profiles or sections hidden behind "Show more" buttons may not be fully captured - by design, see the design rule above.
+- **Unverifiable rejections**: a must-have the model judges `unmet` but cannot support with a verbatim quote is downgraded to `unknown` rather than counted against the candidate. That can make someone look stronger than they are. The score panel flags must-have unknowns, so read the per-criterion lines before trusting a percentage.
+- **No official LinkedIn API**: LinkedIn's Talent Solutions APIs are gated behind an approved-partner program and are not available to individual recruiters. Everything here reads the rendered page.
 
 ## License
 
