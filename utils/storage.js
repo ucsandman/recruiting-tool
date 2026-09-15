@@ -36,6 +36,35 @@ const Storage = {
     return this.remove('claudeApiKey');
   },
 
+  // AI provider helpers
+  async getAIProvider() {
+    return (await this.get('aiProvider')) || 'anthropic';
+  },
+
+  async setAIProvider(provider) {
+    return this.set('aiProvider', provider);
+  },
+
+  async getOpenAIApiKey() {
+    return this.get('openaiApiKey');
+  },
+
+  async setOpenAIApiKey(key) {
+    return this.set('openaiApiKey', key);
+  },
+
+  async removeOpenAIApiKey() {
+    return this.remove('openaiApiKey');
+  },
+
+  async getOpenAIModel() {
+    return this.get('openaiModel');
+  },
+
+  async setOpenAIModel(model) {
+    return this.set('openaiModel', model);
+  },
+
   // Candidate storage helpers
   async getSavedCandidates() {
     return (await this.get('savedCandidates')) || [];

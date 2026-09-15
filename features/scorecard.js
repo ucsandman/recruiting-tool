@@ -216,8 +216,7 @@ const ScorecardUI = {
       }
       go.disabled = true;
       try {
-        const apiKey = await Storage.getApiKey();
-        const raw = await callClaude(Scorecard.buildDerivePrompt(jd), apiKey, 2048);
+        const raw = await callAI(Scorecard.buildDerivePrompt(jd), 2048);
         const rubric = Scorecard.parseDerivedRubric(raw);
 
         let sc = Scorecard.create({ roleName: nameInput.value.trim() || 'Untitled role' });

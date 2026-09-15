@@ -10,6 +10,13 @@ let loadingMessage;
 let toastContainer;
 let apiKeyInput;
 let apiKeyStatus;
+let providerSelect;
+let anthropicFieldsGroup;
+let openaiFieldsGroup;
+let openaiApiKeyInput;
+let openaiApiKeyStatus;
+let openaiModelSelect;
+let loadModelsBtn;
 
 // Track if we're in a popped-out window
 let isPoppedOut = false;
@@ -23,6 +30,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   toastContainer = document.getElementById('toast-container');
   apiKeyInput = document.getElementById('api-key-input');
   apiKeyStatus = document.getElementById('api-key-status');
+  providerSelect = document.getElementById('ai-provider-select');
+  anthropicFieldsGroup = document.getElementById('anthropic-fields');
+  openaiFieldsGroup = document.getElementById('openai-fields');
+  openaiApiKeyInput = document.getElementById('openai-api-key-input');
+  openaiApiKeyStatus = document.getElementById('openai-api-key-status');
+  openaiModelSelect = document.getElementById('openai-model-select');
+  loadModelsBtn = document.getElementById('load-openai-models-btn');
 
   // Check if we're in a popped-out window
   isPoppedOut = window.location.search.includes('popout=true');
@@ -131,8 +145,10 @@ function setupSettingsModal() {
   settingsBtn.addEventListener('click', openSettings);
   closeSettingsBtn.addEventListener('click', closeSettings);
   cancelSettingsBtn.addEventListener('click', closeSettings);
-  saveSettingsBtn.addEventListener('click', saveApiKey);
+  saveSettingsBtn.addEventListener('click', saveSettings);
   modalOverlay.addEventListener('click', closeSettings);
+  providerSelect.addEventListener('change', updateProviderVisibility);
+  loadModelsBtn.addEventListener('click', loadOpenAIModels);
 
   // Toggle password visibility
   toggleApiKeyBtn.addEventListener('click', () => {
@@ -149,6 +165,9 @@ function setupSettingsModal() {
 }
 
 async function openSettings() {
+  const provider = await Storage.getAIProvider();
+  providerSelect.value = provider;
+
   const apiKey = await Storage.getApiKey();
   if (apiKey) {
     apiKeyInput.value = apiKey;
@@ -157,6 +176,20 @@ async function openSettings() {
     apiKeyInput.value = '';
     apiKeyStatus.textContent = 'No API key configured';
   }
+
+  const openaiApiKey = await Storage.getOpenAIApiKey();
+  if (openaiApiKey) {
+    openaiApiKeyInput.value = openaiApiKey;
+    openaiApiKeyStatus.textContent = `Current: ${maskApiKey(openaiApiKey)}`;
+  } else {
+    openaiApiKeyInput.value = '';
+    openaiApiKeyStatus.textContent = 'No API key configured';
+  }
+
+  const savedModel = await Storage.getOpenAIModel();
+  populateOpenAIModelSelect(savedModel ? [savedModel] : [], savedModel);
+
+  updateProviderVisibility();
   settingsModal.classList.remove('hidden');
   apiKeyInput.focus();
 }
@@ -165,9 +198,77 @@ function closeSettings() {
   settingsModal.classList.add('hidden');
   apiKeyInput.value = '';
   apiKeyInput.type = 'password';
+  openaiApiKeyInput.value = '';
 }
 
-async function saveApiKey() {
+function updateProviderVisibility() {
+  const isOpenAI = providerSelect.value === 'openai';
+  anthropicFieldsGroup.classList.toggle('hidden', isOpenAI);
+  openaiFieldsGroup.classList.toggle('hidden', !isOpenAI);
+}
+
+function populateOpenAIModelSelect(models, selected) {
+  openaiModelSelect.textContent = '';
+
+  if (models.length === 0) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'No models loaded yet';
+    openaiModelSelect.appendChild(opt);
+    return;
+  }
+
+  models.forEach(id => {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = id;
+    openaiModelSelect.appendChild(opt);
+  });
+
+  if (selected && models.includes(selected)) {
+    openaiModelSelect.value = selected;
+  }
+}
+
+async function loadOpenAIModels() {
+  const key = openaiApiKeyInput.value.trim();
+  if (!key) {
+    showToast('Enter your OpenAI API key first', 'error');
+    return;
+  }
+
+  loadModelsBtn.disabled = true;
+  showLoading('Loading OpenAI models...');
+
+  try {
+    const models = await AIProvider.listOpenAIModels(key);
+    populateOpenAIModelSelect(models, openaiModelSelect.value);
+    showToast(`Loaded ${models.length} models`, 'success');
+  } catch (error) {
+    showToast(error.message, 'error');
+  } finally {
+    loadModelsBtn.disabled = false;
+    hideLoading();
+  }
+}
+
+async function saveSettings() {
+  const provider = providerSelect.value;
+
+  if (provider === 'openai') {
+    const key = openaiApiKeyInput.value.trim();
+    if (!key) {
+      showToast('Please enter an API key', 'error');
+      return;
+    }
+    await Storage.setOpenAIApiKey(key);
+    await Storage.setOpenAIModel(openaiModelSelect.value || '');
+    await Storage.setAIProvider('openai');
+    showToast('Settings saved', 'success');
+    closeSettings();
+    return;
+  }
+
   const key = apiKeyInput.value.trim();
 
   if (!key) {
@@ -188,6 +289,7 @@ async function saveApiKey() {
 
     if (isValid) {
       await Storage.setApiKey(key);
+      await Storage.setAIProvider('anthropic');
       showToast('API key saved successfully', 'success');
       closeSettings();
     } else {
@@ -207,6 +309,30 @@ async function checkApiKey() {
 
 async function getApiKey() {
   return await Storage.getApiKey();
+}
+
+/**
+ * Single entry point every AI feature calls through. Reads the active
+ * provider/key/model from storage and dispatches via AIProvider. maxTokens
+ * only ever applies to Anthropic - see AIProvider.callModel.
+ */
+async function callAI(prompt, maxTokens) {
+  const provider = await Storage.getAIProvider();
+
+  if (provider === 'openai') {
+    const apiKey = await Storage.getOpenAIApiKey();
+    if (!apiKey) {
+      throw new Error('Please add your OpenAI API key in settings');
+    }
+    const model = await Storage.getOpenAIModel();
+    if (!model) {
+      throw new Error('Pick an OpenAI model in Settings (use Load models) before using AI features.');
+    }
+    return AIProvider.callModel(prompt, { provider: 'openai', apiKey, model });
+  }
+
+  const apiKey = await Storage.getApiKey();
+  return AIProvider.callModel(prompt, { provider: 'anthropic', apiKey, maxTokens });
 }
 
 /**

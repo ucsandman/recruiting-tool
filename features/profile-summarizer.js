@@ -156,12 +156,6 @@ const ProfileSummarizer = {
   },
 
   async summarizeProfile() {
-    const apiKey = await getApiKey();
-    if (!apiKey) {
-      showToast('Please add your Claude API key in settings', 'error');
-      return;
-    }
-
     showLoading('Extracting profile data...');
 
     try {
@@ -176,7 +170,7 @@ const ProfileSummarizer = {
       showLoading('Generating AI summary...');
 
       const prompt = this.buildPrompt(this.currentProfile);
-      const summaryText = await callClaude(prompt, apiKey, 1024);
+      const summaryText = await callAI(prompt, 1024);
 
       this.currentSummary = parseClaudeResponse(summaryText);
       this.currentSummary.raw = summaryText;
@@ -562,7 +556,6 @@ Provide your analysis in this exact format:
       btn.disabled = true;
       results.textContent = '';
       try {
-        const apiKey = await Storage.getApiKey();
         const candidate = {
           id: profile.profileUrl || 'current',
           name: profile.name,
@@ -571,8 +564,8 @@ Provide your analysis in this exact format:
           experience: profile.experience,
           skills: profile.skills
         };
-        const raw = await callClaude(
-          CandidateScorer.buildPrompt([candidate], scorecard), apiKey, 4096
+        const raw = await callAI(
+          CandidateScorer.buildPrompt([candidate], scorecard), 4096
         );
         const [score] = CandidateScorer.parseResponse(raw, scorecard, [candidate]);
         if (!score) {

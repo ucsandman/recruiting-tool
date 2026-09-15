@@ -111,6 +111,14 @@
         </div>
         <div class="modal-body">
           <div class="form-group">
+            <label for="ai-provider-select">AI Provider</label>
+            <select id="ai-provider-select" class="form-input">
+              <option value="anthropic">Anthropic (Claude)</option>
+              <option value="openai">OpenAI</option>
+            </select>
+          </div>
+
+          <div id="anthropic-fields" class="form-group">
             <label for="api-key-input">Claude API Key</label>
             <div class="input-with-toggle">
               <input type="password" id="api-key-input" placeholder="sk-ant-api..." autocomplete="off">
@@ -122,6 +130,17 @@
               </button>
             </div>
             <p id="api-key-status" class="help-text"></p>
+          </div>
+
+          <div id="openai-fields" class="form-group hidden">
+            <label for="openai-api-key-input">OpenAI API Key</label>
+            <input type="password" id="openai-api-key-input" class="form-input" placeholder="sk-..." autocomplete="off">
+            <p id="openai-api-key-status" class="help-text"></p>
+
+            <button id="load-openai-models-btn" class="btn btn-secondary" type="button">Load models</button>
+
+            <label for="openai-model-select">Model</label>
+            <select id="openai-model-select" class="form-input"></select>
           </div>
         </div>
         <div class="modal-footer">
@@ -146,6 +165,7 @@
   <script src="../utils/signals.js"></script>
   <script src="../utils/helpers.js"></script>
   <script src="../lib/claude-api.js"></script>
+  <script src="../lib/ai-provider.js"></script>
   <script src="../features/profile-summarizer.js"></script>
   <script src="../features/boolean-builder.js"></script>
   <script src="../features/candidate-compare.js"></script>

@@ -10,7 +10,8 @@
   ],
   "host_permissions": [
     "https://www.linkedin.com/*",
-    "https://api.anthropic.com/*"
+    "https://api.anthropic.com/*",
+    "https://api.openai.com/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",

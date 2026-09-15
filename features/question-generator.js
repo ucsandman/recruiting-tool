@@ -165,17 +165,11 @@ const QuestionGenerator = {
       return;
     }
 
-    const apiKey = await getApiKey();
-    if (!apiKey) {
-      showToast('Please add your Claude API key in settings', 'error');
-      return;
-    }
-
     showLoading('Generating interview questions...');
 
     try {
       const prompt = this.buildPrompt(values);
-      const response = await callClaude(prompt, apiKey, 2048);
+      const response = await callAI(prompt, 2048);
 
       this.currentQuestions = parseQuestions(response);
       this.displayQuestions();
