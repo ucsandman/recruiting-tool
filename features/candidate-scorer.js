@@ -8,6 +8,8 @@
  *  - absence of evidence downgrades BOTH "met" and "unmet" to "unknown" -
  *    a contradiction with nothing to quote is not a contradiction, and a
  *    missing mention is not a failure
+ *  - a "met" quote must be substantive - a single character or bare
+ *    punctuation trivially occurs in any profile and proves nothing
  *  - "unknown" is excluded from the scoring denominator entirely; a total
  *    of zero decidable criteria reports null, never 0%
  *  - dealbreakers are reported separately via dealbreakerHit, never folded
@@ -36,6 +38,42 @@ function normalizeWhitespace(text) {
   return text.replace(/\s+/g, ' ').trim();
 }
 
+// Comparison-only normalization for matching a quote against profile text.
+// Models routinely retype curly quotes, en/em dashes and non-breaking spaces
+// as their plain-ASCII equivalents, so treat those as the same character
+// when checking whether a quote occurs in the source text. This never
+// touches the evidence string that gets stored and shown to the recruiter -
+// only the two strings being compared.
+function normalizeForCompare(text) {
+  return normalizeWhitespace(
+    text
+      .replace(/[‘’]/g, "'")
+      .replace(/[“”]/g, '"')
+      .replace(/[–—]/g, '-')
+      .replace(/ /g, ' ')
+  ).toLowerCase();
+}
+
+// A recognised verdict, normalised once so every caller (internal or
+// external) gets the same tolerant comparison. Anything unrecognised after
+// trimming/lowercasing is "unknown" - never "unmet".
+function normalizeVerdict(raw) {
+  const v = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  return RECOGNISED_VERDICTS.includes(v) ? v : 'unknown';
+}
+
+// A quote has to actually be a quote. Floor: at least 2 characters after
+// trimming, and at least 2 of those characters must be letters or digits.
+// This admits a short but genuine quote ("Go", "Senior Engineer") while
+// rejecting a single character, bare punctuation, or a dash - each of which
+// trivially occurs as a substring of almost any text and would otherwise
+// let a model earn "met" for free.
+function isSubstantiveEvidence(evidence) {
+  if (evidence.length < 2) return false;
+  const wordChars = evidence.match(/[\p{L}\p{N}]/gu) || [];
+  return wordChars.length >= 2;
+}
+
 // Weights only ever mean 1, 2, or 3. A scorecard saved before the clamp in
 // features/scorecard.js existed can still hold a 0, a negative, a fraction,
 // or a string, so the scorer clamps again rather than trusting storage.
@@ -53,7 +91,30 @@ function buildSearchableText(candidate) {
     JSON.stringify(candidate.experience || []),
     (candidate.skills || []).join(' ')
   ];
-  return normalizeWhitespace(parts.join(' ')).toLowerCase();
+  return normalizeForCompare(parts.join(' '));
+}
+
+// Duplicate lines for one criterionId collapse to one. A worthless duplicate
+// (downgraded to "unknown" - nothing behind it) must not erase a duplicate
+// that actually survived verification; a genuine second opinion that
+// disagrees (a verified "met" against a verified "unmet") is real
+// self-contradiction and becomes "unknown".
+function mergeDuplicateGroup(groupLines) {
+  if (groupLines.length === 1) return groupLines[0];
+
+  const decided = groupLines.filter(l => l.verdict !== 'unknown');
+  const distinctVerdicts = new Set(decided.map(l => l.verdict));
+
+  if (distinctVerdicts.size === 0) {
+    return { criterionId: groupLines[0].criterionId, verdict: 'unknown', evidence: null };
+  }
+  if (distinctVerdicts.size > 1) {
+    return { criterionId: groupLines[0].criterionId, verdict: 'unknown', evidence: null };
+  }
+
+  const verdict = [...distinctVerdicts][0];
+  const withEvidence = decided.find(l => l.evidence) || decided[0];
+  return { criterionId: groupLines[0].criterionId, verdict, evidence: withEvidence.evidence || null };
 }
 
 const CandidateScorer = {
@@ -88,16 +149,25 @@ const CandidateScorer = {
       ...criteria.map(c => `  ${c.id} [${c.bucket}] ${c.text}`),
       '',
       'Candidates:',
-      ...candidates.map(c => [
-        `  --- candidate ${c.id} ---`,
-        DATA_START,
-        `  Name: ${sanitizeText(c.name || '')}`,
-        `  Headline: ${sanitizeText(c.headline || '')}`,
-        `  About: ${sanitizeText(c.about || '')}`,
-        `  Experience: ${sanitizeText(JSON.stringify(c.experience || []))}`,
-        `  Skills: ${sanitizeText((c.skills || []).join(', '))}`,
-        DATA_END
-      ].join('\n')),
+      ...candidates.map(c => {
+        // Sanitize each field individually, then again after they're joined,
+        // so a forged delimiter split across two adjacent fields (the tail
+        // of one, the head of the next) can't survive either pass alone.
+        const body = sanitizeText([
+          `  Name: ${sanitizeText(c.name || '')}`,
+          `  Headline: ${sanitizeText(c.headline || '')}`,
+          `  About: ${sanitizeText(c.about || '')}`,
+          `  Experience: ${sanitizeText(JSON.stringify(c.experience || []))}`,
+          `  Skills: ${sanitizeText((c.skills || []).join(', '))}`
+        ].join('\n'));
+
+        return [
+          `  --- candidate ${c.id} ---`,
+          DATA_START,
+          body,
+          DATA_END
+        ].join('\n');
+      }),
       '',
       'Respond with JSON only, no prose and no code fence:',
       '[{"candidateId":"...","lines":[{"criterionId":"...","verdict":"met|unmet|unknown","evidence":"verbatim quote or null"}]}]'
@@ -108,6 +178,9 @@ const CandidateScorer = {
    * Percentage of DECIDABLE weight that was met. Unknown criteria are excluded
    * from the denominator entirely so a thin profile scores low-confidence,
    * not low-quality. Dealbreakers are reported separately, never scored.
+   * Verdicts are normalised defensively - this is exported public API and
+   * may be called directly with unnormalised input, not only through
+   * parseResponse.
    */
   scoreTotal(lines, scorecard) {
     const weights = new Map();
@@ -121,9 +194,10 @@ const CandidateScorer = {
     lines.forEach(line => {
       if (!weights.has(line.criterionId)) return; // dealbreaker or unknown id
       const weight = weights.get(line.criterionId);
-      if (line.verdict === 'unknown') { unknownCount += 1; return; }
+      const verdict = normalizeVerdict(line.verdict);
+      if (verdict === 'unknown') { unknownCount += 1; return; }
       decidable += weight;
-      if (line.verdict === 'met') met += weight;
+      if (verdict === 'met') met += weight;
     });
 
     const total = decidable === 0 ? null : Math.round((met / decidable) * 100);
@@ -175,8 +249,7 @@ const CandidateScorer = {
           // Discard hallucinated criterion ids rather than scoring them.
           .filter(l => l && validIds.has(l.criterionId))
           .map(l => {
-            let verdict = typeof l.verdict === 'string' ? l.verdict.trim().toLowerCase() : '';
-            if (!RECOGNISED_VERDICTS.includes(verdict)) verdict = 'unknown';
+            let verdict = normalizeVerdict(l.verdict);
 
             let evidence = typeof l.evidence === 'string' && l.evidence.trim() !== ''
               ? l.evidence.trim()
@@ -189,38 +262,34 @@ const CandidateScorer = {
               verdict = 'unknown';
             }
 
-            // A surviving "met" must be checked against the candidate's own
-            // profile text when we have it, so a fabricated quote can't
-            // stand as evidence.
-            if (verdict === 'met' && evidence && searchable) {
-              const needle = normalizeWhitespace(evidence).toLowerCase();
-              if (!searchable.includes(needle)) {
+            if (verdict === 'met' && evidence) {
+              // A one-character or punctuation-only "quote" proves nothing -
+              // it occurs in almost any text - so it can't support "met".
+              if (!isSubstantiveEvidence(evidence)) {
                 verdict = 'unknown';
                 evidence = null;
+              } else if (searchable) {
+                // A surviving "met" must be checked against the candidate's
+                // own profile text when we have it, so a fabricated quote
+                // can't stand as evidence.
+                const needle = normalizeForCompare(evidence);
+                if (!searchable.includes(needle)) {
+                  verdict = 'unknown';
+                  evidence = null;
+                }
               }
             }
 
             return { criterionId: l.criterionId, verdict, evidence };
           });
 
-        // Collapse duplicate criterion ids to one line. Agreement keeps the
-        // verdict (and any evidence a duplicate carried that the first
-        // didn't); disagreement is itself undecidable, so it becomes
-        // "unknown" rather than a coin flip.
-        const byId = new Map();
+        // Collapse duplicate criterion ids to one line via mergeDuplicateGroup.
+        const groups = new Map();
         processed.forEach(line => {
-          const existing = byId.get(line.criterionId);
-          if (!existing) {
-            byId.set(line.criterionId, line);
-          } else if (existing.verdict === line.verdict) {
-            if (!existing.evidence && line.evidence) {
-              byId.set(line.criterionId, { ...existing, evidence: line.evidence });
-            }
-          } else {
-            byId.set(line.criterionId, { criterionId: line.criterionId, verdict: 'unknown', evidence: null });
-          }
+          if (!groups.has(line.criterionId)) groups.set(line.criterionId, []);
+          groups.get(line.criterionId).push(line);
         });
-        const lines = Array.from(byId.values());
+        const lines = Array.from(groups.values()).map(mergeDuplicateGroup);
 
         const hit = lines.find(l => dealbreakerIds.has(l.criterionId) && l.verdict === 'met');
         const { total, unknownCount } = this.scoreTotal(lines, scorecard);
