@@ -1837,6 +1837,11 @@ Wires the scorer into the summarizer tab so the recruiter picks a scorecard and 
 **Interfaces:**
 - Consumes: `CandidateScorer.buildPrompt/parseResponse`, `Storage.getScorecards`,
   `Scorecard.isUsable`, `callClaude`.
+  IMPORTANT: `parseResponse(responseText, scorecard, candidates)` now takes a THIRD
+  argument. Pass `[candidate]` so it can verify each cited quote actually appears in
+  that candidate's profile text; omit it and quote verification is silently skipped.
+  `recommendation` may also be `'insufficient-data'` when nothing was decidable —
+  render that distinctly from `'weak'`, they mean opposite things to a recruiter.
 - Produces: no new exports. This is the end of Phase 3.
 
 - [ ] **Step 1: Add the script tag**
@@ -1903,7 +1908,7 @@ Add to the `ProfileSummarizer` object in `features/profile-summarizer.js`:
         const raw = await callClaude(
           CandidateScorer.buildPrompt([candidate], scorecard), apiKey, 4096
         );
-        const [score] = CandidateScorer.parseResponse(raw, scorecard);
+        const [score] = CandidateScorer.parseResponse(raw, scorecard, [candidate]);
         results.appendChild(this.renderScore(score, scorecard));
       } catch (err) {
         showToast(err.message, 'error');
@@ -1994,6 +1999,7 @@ Add styles to `popup/popup.css`:
 .chip-strong { background: #e6f5ea; color: #1d6b33; }
 .chip-possible { background: #fff5e0; color: #7a5a10; }
 .chip-weak { background: #f1f1f1; color: #666; }
+.chip-insufficient-data { background: #eef1f5; color: #555; }
 ```
 
 - [ ] **Step 3: Run tests**
