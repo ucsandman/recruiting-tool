@@ -145,7 +145,7 @@ const ScorecardUI = {
 
     if (all.length === 0) {
       const empty = document.createElement('p');
-      empty.className = 'empty-state';
+      empty.className = 'scorecard-empty';
       empty.textContent = 'No scorecards yet. Paste a job description to build one.';
       this.container.appendChild(empty);
       return;

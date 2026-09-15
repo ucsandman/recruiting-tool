@@ -71,7 +71,7 @@ const ProfileSummarizer = {
     if (cached && cached.profileUrl === currentUrl) {
       this.currentProfile = cached.profileData;
       this.currentSummary = cached.summary;
-      this.displaySummary();
+      await this.displaySummary();
     }
   },
 
@@ -180,7 +180,7 @@ const ProfileSummarizer = {
       // Cache the summary
       await this.cacheSummary();
 
-      this.displaySummary();
+      await this.displaySummary();
 
     } catch (error) {
       showToast(error.message, 'error');
@@ -254,7 +254,7 @@ Provide your analysis in this exact format:
 [Role types and company cultures where this person would thrive]`;
   },
 
-  displaySummary() {
+  async displaySummary() {
     const resultEl = document.getElementById('summary-result');
     const summary = this.currentSummary;
     const profile = this.currentProfile;
@@ -280,6 +280,7 @@ Provide your analysis in this exact format:
     profileBody.className = 'card-body';
 
     profileBody.appendChild(this.renderSignals(profile));
+    profileBody.appendChild(await this.renderScoring(profile));
 
     // Basic Info
     if (profile.headline) {
@@ -498,6 +499,129 @@ Provide your analysis in this exact format:
     }
 
     return row;
+  },
+
+  /**
+   * Scorecard picker plus results. Only scorecards the recruiter has saved
+   * are offered; a derived-but-unreviewed rubric cannot score anyone.
+   */
+  async renderScoring(profile) {
+    const wrap = document.createElement('div');
+    wrap.className = 'scoring-block';
+
+    const all = await Storage.getScorecards();
+    const usable = all.filter(sc => Scorecard.isUsable(sc));
+
+    if (usable.length === 0) {
+      const hint = document.createElement('p');
+      hint.className = 'hint';
+      hint.textContent = 'No saved scorecards yet. Build one in the Scorecards tab to score this profile.';
+      wrap.appendChild(hint);
+      return wrap;
+    }
+
+    const select = document.createElement('select');
+    select.className = 'form-input';
+    usable.forEach(sc => {
+      const opt = document.createElement('option');
+      opt.value = sc.id;
+      opt.textContent = sc.roleName;
+      select.appendChild(opt);
+    });
+    wrap.appendChild(select);
+
+    const results = document.createElement('div');
+
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-primary';
+    btn.textContent = 'Score against this role';
+    btn.addEventListener('click', async () => {
+      const scorecard = usable.find(sc => sc.id === select.value);
+      btn.disabled = true;
+      results.textContent = '';
+      try {
+        const apiKey = await Storage.getApiKey();
+        const candidate = {
+          id: profile.profileUrl || 'current',
+          name: profile.name,
+          headline: profile.headline,
+          about: profile.about,
+          experience: profile.experience,
+          skills: profile.skills
+        };
+        const raw = await callClaude(
+          CandidateScorer.buildPrompt([candidate], scorecard), apiKey, 4096
+        );
+        const [score] = CandidateScorer.parseResponse(raw, scorecard, [candidate]);
+        results.appendChild(this.renderScore(score, scorecard));
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    wrap.appendChild(btn);
+    wrap.appendChild(results);
+    return wrap;
+  },
+
+  renderScore(score, scorecard) {
+    const box = document.createElement('div');
+    box.className = 'card score-card';
+
+    const header = document.createElement('div');
+    header.className = 'score-header';
+    const pct = document.createElement('strong');
+    pct.textContent = score.total === null ? 'Not enough detail to score' : `${score.total}%`;
+    header.appendChild(pct);
+
+    const rec = document.createElement('span');
+    rec.className = `chip chip-${score.recommendation}`;
+    rec.textContent = score.recommendation;
+    header.appendChild(rec);
+
+    if (score.unknownCount > 0) {
+      const unk = document.createElement('span');
+      unk.className = 'chip chip-unknown';
+      unk.textContent = `${score.unknownCount} not stated on profile`;
+      header.appendChild(unk);
+    }
+    box.appendChild(header);
+
+    if (score.dealbreakerHit) {
+      const db = document.createElement('p');
+      db.className = 'dealbreaker';
+      const crit = scorecard.dealbreakers.find(c => c.id === score.dealbreakerHit);
+      db.textContent = `Dealbreaker: ${crit ? crit.text : score.dealbreakerHit}`;
+      box.appendChild(db);
+    }
+
+    const byId = new Map(
+      [...scorecard.mustHaves, ...scorecard.niceToHaves, ...scorecard.dealbreakers]
+        .map(c => [c.id, c])
+    );
+
+    score.lines.forEach(line => {
+      const row = document.createElement('div');
+      row.className = `score-line score-${line.verdict}`;
+
+      const label = document.createElement('div');
+      const crit = byId.get(line.criterionId);
+      label.textContent = `${line.verdict.toUpperCase()} — ${crit ? crit.text : line.criterionId}`;
+      row.appendChild(label);
+
+      if (line.evidence) {
+        const quote = document.createElement('blockquote');
+        quote.className = 'evidence';
+        quote.textContent = line.evidence;
+        row.appendChild(quote);
+      }
+
+      box.appendChild(row);
+    });
+
+    return box;
   },
 
   createCollapsibleSection(title, content, isHtml = false) {
