@@ -51,3 +51,35 @@ test('throws when the model returns no must-haves at all', () => {
     /no must-haves/i
   );
 });
+
+test('parseDerivedRubric("null") throws a descriptive Error, not a raw TypeError', () => {
+  assert.throws(
+    () => Scorecard.parseDerivedRubric('null'),
+    /could not read/i
+  );
+});
+
+test('clamps a zero weight to 1 rather than letting it survive as falsy', () => {
+  const r = Scorecard.parseDerivedRubric('{"mustHaves":[{"text":"Go","weight":0}],"niceToHaves":[],"dealbreakers":[]}');
+  assert.strictEqual(r.mustHaves[0].weight, 1);
+});
+
+test('clamps a negative weight to 1', () => {
+  const r = Scorecard.parseDerivedRubric('{"mustHaves":[{"text":"Go","weight":-3}],"niceToHaves":[],"dealbreakers":[]}');
+  assert.strictEqual(r.mustHaves[0].weight, 1);
+});
+
+test('clamps a weight above 3 down to 3', () => {
+  const r = Scorecard.parseDerivedRubric('{"mustHaves":[{"text":"Go","weight":1e20}],"niceToHaves":[],"dealbreakers":[]}');
+  assert.strictEqual(r.mustHaves[0].weight, 3);
+});
+
+test('rounds a fractional weight into range', () => {
+  const r = Scorecard.parseDerivedRubric('{"mustHaves":[{"text":"Go","weight":2.6}],"niceToHaves":[],"dealbreakers":[]}');
+  assert.strictEqual(r.mustHaves[0].weight, 3);
+});
+
+test('defaults a string weight to 1', () => {
+  const r = Scorecard.parseDerivedRubric('{"mustHaves":[{"text":"Go","weight":"high"}],"niceToHaves":[],"dealbreakers":[]}');
+  assert.strictEqual(r.mustHaves[0].weight, 1);
+});

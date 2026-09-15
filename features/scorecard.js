@@ -12,6 +12,16 @@ function newId(prefix) {
   return `${prefix}_${Date.now().toString(36)}_${idCounter.toString(36)}`;
 }
 
+// Weights only ever mean 1 (nice-to-have-ish), 2, or 3 (fails without it).
+// Anything else — non-numeric, missing, zero, negative, fractional, or
+// above 3 — gets clamped here, at the two places a weight enters the
+// system, so an invalid value never reaches the scorer.
+function clampWeight(weight) {
+  const n = Number(weight);
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(3, Math.max(1, Math.round(n)));
+}
+
 const Scorecard = {
   create({ roleName }) {
     return {
@@ -29,7 +39,7 @@ const Scorecard = {
     if (!BUCKETS.includes(bucket)) {
       throw new Error(`Unknown bucket: ${bucket}`);
     }
-    const criterion = { id: newId('cr'), text, weight };
+    const criterion = { id: newId('cr'), text, weight: clampWeight(weight) };
     return { ...scorecard, [bucket]: [...scorecard[bucket], criterion] };
   },
 
@@ -80,10 +90,14 @@ const Scorecard = {
       throw new Error('Could not read the rubric: the response was not valid JSON.');
     }
 
+    if (parsed === null) {
+      throw new Error('Could not read the rubric: the response was not valid JSON.');
+    }
+
     const clean = (list, withWeight) => (Array.isArray(list) ? list : [])
       .filter(item => item && typeof item.text === 'string' && item.text.trim() !== '')
       .map(item => withWeight
-        ? { text: item.text.trim(), weight: Number.isFinite(item.weight) ? item.weight : 1 }
+        ? { text: item.text.trim(), weight: clampWeight(item.weight) }
         : { text: item.text.trim() });
 
     const rubric = {

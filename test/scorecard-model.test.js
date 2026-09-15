@@ -51,3 +51,33 @@ test('criterion ids are unique within a scorecard', () => {
   const ids = new Set(sc.mustHaves.map(c => c.id));
   assert.strictEqual(ids.size, 20);
 });
+
+test('addCriterion clamps a zero weight to 1', () => {
+  const sc = Scorecard.create({ roleName: 'Role' });
+  const next = Scorecard.addCriterion(sc, 'mustHaves', 'x', 0);
+  assert.strictEqual(next.mustHaves[0].weight, 1);
+});
+
+test('addCriterion clamps a negative weight to 1', () => {
+  const sc = Scorecard.create({ roleName: 'Role' });
+  const next = Scorecard.addCriterion(sc, 'mustHaves', 'x', -3);
+  assert.strictEqual(next.mustHaves[0].weight, 1);
+});
+
+test('addCriterion clamps a weight above 3 to 3', () => {
+  const sc = Scorecard.create({ roleName: 'Role' });
+  const next = Scorecard.addCriterion(sc, 'mustHaves', 'x', 1e20);
+  assert.strictEqual(next.mustHaves[0].weight, 3);
+});
+
+test('addCriterion rounds a fractional weight into range', () => {
+  const sc = Scorecard.create({ roleName: 'Role' });
+  const next = Scorecard.addCriterion(sc, 'mustHaves', 'x', 2.6);
+  assert.strictEqual(next.mustHaves[0].weight, 3);
+});
+
+test('addCriterion defaults a non-numeric weight like "high" to 1', () => {
+  const sc = Scorecard.create({ roleName: 'Role' });
+  const next = Scorecard.addCriterion(sc, 'mustHaves', 'x', 'high');
+  assert.strictEqual(next.mustHaves[0].weight, 1);
+});
