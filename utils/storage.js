@@ -59,5 +59,23 @@ const Storage = {
 
   async clearAllCandidates() {
     return this.saveCandidates([]);
+  },
+
+  // Scorecard helpers
+  async getScorecards() {
+    return (await this.get('scorecards')) || [];
+  },
+
+  async saveScorecard(scorecard) {
+    const all = await this.getScorecards();
+    const index = all.findIndex(s => s.id === scorecard.id);
+    if (index >= 0) all[index] = scorecard;
+    else all.push(scorecard);
+    return this.set('scorecards', all);
+  },
+
+  async removeScorecard(id) {
+    const all = await this.getScorecards();
+    return this.set('scorecards', all.filter(s => s.id !== id));
   }
 };
