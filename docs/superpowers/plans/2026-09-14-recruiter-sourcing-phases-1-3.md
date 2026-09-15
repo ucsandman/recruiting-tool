@@ -87,8 +87,8 @@ test('content scripts contain no forbidden automation patterns', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --test test/`
-Expected: FAIL with `Cannot find module` or no test script configured, because `package.json` does not exist yet.
+Run: `npm test`
+Expected: FAIL — npm reports no `package.json` / no test script, because `package.json` does not exist yet.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -101,7 +101,7 @@ Create `package.json`:
   "private": true,
   "description": "Chrome extension: AI-powered recruiting assistant",
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test \"test/**/*.test.js\""
   }
 }
 ```
