@@ -71,7 +71,11 @@ const ProfileSummarizer = {
     if (cached && cached.profileUrl === currentUrl) {
       this.currentProfile = cached.profileData;
       this.currentSummary = cached.summary;
-      await this.displaySummary();
+      try {
+        await this.displaySummary();
+      } catch (error) {
+        showToast('Failed to load the cached summary', 'error');
+      }
     }
   },
 
@@ -553,6 +557,10 @@ Provide your analysis in this exact format:
           CandidateScorer.buildPrompt([candidate], scorecard), apiKey, 4096
         );
         const [score] = CandidateScorer.parseResponse(raw, scorecard, [candidate]);
+        if (!score) {
+          showToast('No score came back for this candidate. Try again.', 'error');
+          return;
+        }
         results.appendChild(this.renderScore(score, scorecard));
       } catch (err) {
         showToast(err.message, 'error');
@@ -576,9 +584,16 @@ Provide your analysis in this exact format:
     pct.textContent = score.total === null ? 'Not enough detail to score' : `${score.total}%`;
     header.appendChild(pct);
 
+    const RECOMMENDATION_LABELS = {
+      strong: 'Strong',
+      possible: 'Possible',
+      weak: 'Weak',
+      'insufficient-data': 'Not enough detail'
+    };
+
     const rec = document.createElement('span');
     rec.className = `chip chip-${score.recommendation}`;
-    rec.textContent = score.recommendation;
+    rec.textContent = RECOMMENDATION_LABELS[score.recommendation] || score.recommendation;
     header.appendChild(rec);
 
     if (score.unknownCount > 0) {
