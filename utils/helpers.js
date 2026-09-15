@@ -150,3 +150,28 @@ function parseQuestions(text) {
 
   return questions;
 }
+
+/**
+ * Ask the content script on a tab to extract the profile.
+ *
+ * Chrome answers "Could not establish connection. Receiving end does not
+ * exist." whenever no content script is listening on that tab — which happens
+ * routinely after the extension is reloaded or updated, because existing tabs
+ * keep running the old (now detached) script until they are refreshed. That
+ * raw message tells a recruiter nothing, so translate it into the action that
+ * actually fixes it.
+ *
+ * A friendly version of this already existed in background/service-worker.js,
+ * but nothing calls that path — every feature messages the tab directly.
+ */
+async function extractProfileFromTab(tabId) {
+  try {
+    return await chrome.tabs.sendMessage(tabId, { action: 'extractProfile' });
+  } catch (error) {
+    const message = (error && error.message) || '';
+    if (/receiving end does not exist|could not establish connection|message port closed/i.test(message)) {
+      throw new Error('Refresh this LinkedIn tab, then try again. The extension was reloaded and this tab is still running the old version.');
+    }
+    throw error;
+  }
+}

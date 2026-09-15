@@ -160,7 +160,7 @@ const ProfileSummarizer = {
 
     try {
       const tab = await getCurrentTab();
-      const response = await chrome.tabs.sendMessage(tab.id, { action: 'extractProfile' });
+      const response = await extractProfileFromTab(tab.id);
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to extract profile data');
