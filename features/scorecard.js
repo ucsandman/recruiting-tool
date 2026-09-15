@@ -144,9 +144,28 @@ const ScorecardUI = {
     this.container.appendChild(newBtn);
 
     if (all.length === 0) {
-      const empty = document.createElement('p');
+      // A stranger should be able to tell what this tab is for without asking.
+      const empty = document.createElement('div');
       empty.className = 'scorecard-empty';
-      empty.textContent = 'No scorecards yet. Paste a job description to build one.';
+
+      const lead = document.createElement('p');
+      lead.className = 'scorecard-empty-lead';
+      lead.textContent = 'A scorecard is what a candidate gets scored against.';
+      empty.appendChild(lead);
+
+      const steps = document.createElement('ol');
+      steps.className = 'scorecard-empty-steps';
+      [
+        'Paste a job description. Claude drafts the must-haves, nice-to-haves and dealbreakers.',
+        'Correct the draft — it over-weights job-post boilerplate — then save it.',
+        'On any LinkedIn profile, hit Score. Every match quotes the profile text that proves it.'
+      ].forEach(text => {
+        const li = document.createElement('li');
+        li.textContent = text;
+        steps.appendChild(li);
+      });
+      empty.appendChild(steps);
+
       this.container.appendChild(empty);
       return;
     }
