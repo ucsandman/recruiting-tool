@@ -85,6 +85,35 @@ const Signals = {
     return { changed: true, from: prev, to: next, kind };
   },
 
+  /**
+   * Open-to-work detection with provenance.
+   * Two independent sources; the recruiter sees which one fired.
+   * @param {object} profileData from the extractors
+   * @param {Date} now injected for deterministic tests
+   */
+  detectOpenToWork(profileData, now = new Date()) {
+    const closed = { open: false, source: null, seenAt: null };
+    if (!profileData || typeof profileData !== 'object') return closed;
+
+    // Recruiter spotlight wins: it is the stronger, intent-declared signal.
+    const spotlights = Array.isArray(profileData.recruiterSpotlights)
+      ? profileData.recruiterSpotlights
+      : [];
+    if (spotlights.some(s => typeof s === 'string' && /open to work/i.test(s))) {
+      return { open: true, source: 'recruiter-spotlight', seenAt: now.toISOString() };
+    }
+
+    const topCard = typeof profileData.topCardText === 'string' ? profileData.topCardText : '';
+    // Match the badge phrase as its own line. A profile that merely contains the
+    // words ("open to work with partners") must not fire.
+    const badge = topCard.split('\n').some(line => /^\s*#?open\s+to\s+work\s*$/i.test(line));
+    if (badge) {
+      return { open: true, source: 'public-badge', seenAt: now.toISOString() };
+    }
+
+    return closed;
+  },
+
   /** "Jan 2023" -> {year:2023, month:1}; "2019" -> {year:2019, month:null} */
   _parsePoint(text) {
     if (typeof text !== 'string') return null;
