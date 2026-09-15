@@ -1,0 +1,9 @@
+{
+  "name": "recruiter-toolkit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chrome extension: AI-powered recruiting assistant",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\""
+  }
+}
