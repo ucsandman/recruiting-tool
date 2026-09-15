@@ -822,3 +822,13 @@ input[type="range"]::-webkit-slider-thumb {
   gap: 8px;
   margin-top: 16px;
 }
+
+/* Signal Row */
+.signal-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.chip { font-size: 11px; padding: 3px 8px; border-radius: 10px; background: #eef1f5; color: #333; }
+.chip-new { background: #fdecea; color: #8a2a22; }
+.chip-settling { background: #fff5e0; color: #7a5a10; }
+.chip-prime { background: #e6f5ea; color: #1d6b33; }
+.chip-entrenched { background: #eef1f5; color: #444; }
+.chip-unknown { background: #f1f1f1; color: #666; }
+.chip-open { background: #e3f0ff; color: #14508a; }

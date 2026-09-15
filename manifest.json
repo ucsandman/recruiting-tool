@@ -27,7 +27,7 @@
   "content_scripts": [
     {
       "matches": ["https://www.linkedin.com/in/*"],
-      "js": ["content/linkedin-extractor.js"]
+      "js": ["utils/signals.js", "content/linkedin-extractor.js"]
     }
   ],
   "icons": {

@@ -279,6 +279,8 @@ Provide your analysis in this exact format:
     const profileBody = document.createElement('div');
     profileBody.className = 'card-body';
 
+    profileBody.appendChild(this.renderSignals(profile));
+
     // Basic Info
     if (profile.headline) {
       const headlineP = document.createElement('p');
@@ -457,6 +459,45 @@ Provide your analysis in this exact format:
     resultEl.appendChild(analysisCard);
 
     resultEl.classList.remove('hidden');
+  },
+
+  /**
+   * Build the deterministic signal row: tenure band and open-to-work status.
+   * Computed locally, never sent to the model.
+   */
+  renderSignals(profile) {
+    const row = document.createElement('div');
+    row.className = 'signal-row';
+
+    const tenure = Signals.parseTenure(profile.currentRole && profile.currentRole.duration);
+    const band = Signals.tenureBand(tenure && tenure.months);
+    const otw = Signals.detectOpenToWork(profile);
+
+    const LABELS = {
+      new: 'Just started',
+      settling: 'Settling in',
+      prime: 'Prime to move',
+      entrenched: 'Long tenure',
+      unknown: 'Tenure unknown'
+    };
+
+    const tenureChip = document.createElement('span');
+    tenureChip.className = `chip chip-tenure chip-${band}`;
+    tenureChip.textContent = tenure
+      ? `${LABELS[band]} (${tenure.months} mo)`
+      : LABELS.unknown;
+    row.appendChild(tenureChip);
+
+    if (otw.open) {
+      const otwChip = document.createElement('span');
+      otwChip.className = 'chip chip-open';
+      otwChip.textContent = otw.source === 'recruiter-spotlight'
+        ? 'Open to work (recruiter signal)'
+        : 'Open to work (public badge)';
+      row.appendChild(otwChip);
+    }
+
+    return row;
   },
 
   createCollapsibleSection(title, content, isHtml = false) {

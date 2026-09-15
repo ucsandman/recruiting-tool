@@ -185,6 +185,19 @@ function parseSimpleListFromText(section, headerText) {
 }
 
 /**
+ * Raw text of the profile top card, used for badge detection.
+ * The top card is the first section and carries no header, so it is
+ * located positionally rather than by header text.
+ */
+function extractTopCardText() {
+  const main = document.querySelector('main');
+  if (!main) return '';
+  const firstSection = main.querySelector('section');
+  if (!firstSection) return '';
+  return (firstSection.innerText || '').trim();
+}
+
+/**
  * Extract profile data from the current LinkedIn page
  */
 function extractProfileData() {
@@ -202,6 +215,7 @@ function extractProfileData() {
     location: extractLocation(),
     profileUrl: window.location.href.split('?')[0],
     profileImageUrl: extractProfileImage(),
+    topCardText: extractTopCardText(),
     about: extractAbout(),
     currentRole: extractCurrentRole(),
     experience: extractExperience(),
