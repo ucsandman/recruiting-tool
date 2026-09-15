@@ -11,6 +11,22 @@ const MONTHS = {
 
 const Signals = {
   /**
+   * Pull a person's name off a LinkedIn tab title.
+   * LinkedIn separates the name from the rest with " | " and, when a
+   * headline follows the name instead, with a SPACED dash (" - " or
+   * " – "). A hyphen inside a surname (e.g. "Relander-Nyrén") is never
+   * spaced, so splitting only on the spaced form preserves it.
+   * @param {string} title e.g. "Jean-Luc Picard | LinkedIn"
+   * @returns {string} the name, or '' if the title yields nothing usable
+   */
+  nameFromTitle(title) {
+    if (typeof title !== 'string') return '';
+    const beforePipe = title.split('|')[0].trim();
+    if (!beforePipe) return '';
+    return beforePipe.split(/\s+[-–—]\s+/)[0].trim();
+  },
+
+  /**
    * Parse a LinkedIn duration string into a month count.
    * @param {string} durationText e.g. "Jan 2023 - Present · 2 yrs 3 mos"
    * @param {Date} now injected for deterministic tests

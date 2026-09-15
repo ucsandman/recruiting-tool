@@ -280,9 +280,8 @@ function extractProfileData() {
 function extractName() {
   // MOST RELIABLE: Get name from page title first
   // LinkedIn titles are formatted as "Name | LinkedIn" or "Name - Title | LinkedIn"
-  const titleMatch = document.title.match(/^(.+?)\s*[|\-–]/);
-  if (titleMatch) {
-    const nameFromTitle = titleMatch[1].trim();
+  const nameFromTitle = Signals.nameFromTitle(document.title);
+  if (nameFromTitle) {
     // Make sure it's not a title like "Software Engineer" - names are typically 2-4 words, no common job words
     const jobWords = ['engineer', 'manager', 'director', 'analyst', 'developer', 'designer', 'specialist', 'consultant', 'lead', 'senior', 'junior', 'vp', 'ceo', 'cto', 'cfo'];
     const lowerName = nameFromTitle.toLowerCase();
@@ -311,8 +310,8 @@ function extractName() {
   }
 
   // LinkedIn 2025: Look for name by finding text that matches page title
-  if (titleMatch) {
-    return titleMatch[1].trim();
+  if (nameFromTitle) {
+    return nameFromTitle;
   }
 
   return null;
