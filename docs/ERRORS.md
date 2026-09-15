@@ -3,6 +3,37 @@
 Things that broke or were gotten wrong, so the next session does not pay for them again.
 Newest first.
 
+## 2026-09-15 — 99 passing tests, and the headline feature did not work at all
+
+**Symptom:** open-to-work detection failed on every real profile that had the badge set.
+Found within minutes of driving a browser at a live LinkedIn profile, after the branch had
+already shipped with 92 green tests.
+
+**Root causes, three of them, none catchable by the tests we had:**
+
+1. LinkedIn renders the badge as `"Open to work · Everyone on LinkedIn"`. Every test used
+   the synthetic string `"Open to work"`, and the regex anchored the whole line, so it
+   never matched reality.
+2. `main.querySelector('section')` returns an outer wrapper containing the ENTIRE profile
+   (392 lines measured), not the top card. The real top card is a nested section.
+3. `extractName()` parsed the page title with `/^(.+?)\s*[|\-–]/`, which truncates at the
+   first hyphen: `"Saga Relander-Nyrén"` became `"Saga Relander"`, `"Jean-Luc Picard"`
+   became `"Jean"`. That also silently broke the name-anchored top-card lookup.
+
+**Fixes:** badge regex allows a separator suffix and the hashtag form; an aria-label
+signal (`", open to work"`) added as an independent source; top card selected as the
+smallest section whose first line equals the name, with a 40-line cap as fallback; title
+parsing splits on `|` first, then only on a SPACED dash (a hyphen inside a surname is
+never spaced).
+
+**Lesson, and it is the important one in this file:** every test fixture was written by
+the same process that wrote the code, so both shared the same wrong assumption about what
+LinkedIn emits. Tests agreeing with each other proves consistency, not correctness. For
+any code that parses a surface someone else controls, at least one fixture must be
+captured from the real thing before the feature is called done. `dom-samples/` exists for
+exactly this and was used for the Recruiter surface — the public `/in/` surface never got
+the same treatment, and that is precisely where all three bugs were.
+
 ## 2026-09-15 — A rule implemented in only one direction
 
 **Symptom:** review found that `parseResponse` downgraded a `met` verdict carrying no
