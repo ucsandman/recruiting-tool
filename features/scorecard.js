@@ -114,6 +114,181 @@ const Scorecard = {
   }
 };
 
+/**
+ * Scorecard UI
+ * Create a rubric from a pasted JD, edit it, save it. A scorecard cannot
+ * score anyone until it has been saved at least once.
+ */
+const ScorecardUI = {
+  container: null,
+  initialized: false,
+  current: null,
+
+  init() {
+    this.container = document.getElementById('scorecards-container');
+    if (!this.container) return;
+    if (!this.initialized) {
+      this.initialized = true;
+    }
+    this.renderList();
+  },
+
+  async renderList() {
+    this.container.textContent = '';
+    const all = await Storage.getScorecards();
+
+    const newBtn = document.createElement('button');
+    newBtn.className = 'btn btn-primary';
+    newBtn.textContent = 'New scorecard from a job description';
+    newBtn.addEventListener('click', () => this.renderCreate());
+    this.container.appendChild(newBtn);
+
+    if (all.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'empty-state';
+      empty.textContent = 'No scorecards yet. Paste a job description to build one.';
+      this.container.appendChild(empty);
+      return;
+    }
+
+    all.forEach(sc => {
+      const card = document.createElement('div');
+      card.className = 'card scorecard-row';
+
+      const name = document.createElement('strong');
+      name.textContent = sc.roleName;
+      card.appendChild(name);
+
+      const status = document.createElement('span');
+      status.className = Scorecard.isUsable(sc) ? 'chip chip-prime' : 'chip chip-unknown';
+      status.textContent = Scorecard.isUsable(sc) ? 'Ready to score' : 'Needs review';
+      card.appendChild(status);
+
+      const edit = document.createElement('button');
+      edit.className = 'btn';
+      edit.textContent = 'Edit';
+      edit.addEventListener('click', () => this.renderEdit(sc));
+      card.appendChild(edit);
+
+      this.container.appendChild(card);
+    });
+  },
+
+  renderCreate() {
+    this.container.textContent = '';
+
+    const nameInput = document.createElement('input');
+    nameInput.className = 'form-input';
+    nameInput.placeholder = 'Role name, e.g. Senior Backend Engineer';
+
+    const jdInput = document.createElement('textarea');
+    jdInput.className = 'form-input';
+    jdInput.rows = 12;
+    jdInput.placeholder = 'Paste the full job description here';
+
+    const go = document.createElement('button');
+    go.className = 'btn btn-primary';
+    go.textContent = 'Build rubric';
+    go.addEventListener('click', async () => {
+      const jd = jdInput.value.trim();
+      if (jd === '') {
+        showToast('Paste a job description first', 'error');
+        return;
+      }
+      go.disabled = true;
+      try {
+        const apiKey = await Storage.getApiKey();
+        const raw = await callClaude(Scorecard.buildDerivePrompt(jd), apiKey, 2048);
+        const rubric = Scorecard.parseDerivedRubric(raw);
+
+        let sc = Scorecard.create({ roleName: nameInput.value.trim() || 'Untitled role' });
+        rubric.mustHaves.forEach(c => { sc = Scorecard.addCriterion(sc, 'mustHaves', c.text, c.weight); });
+        rubric.niceToHaves.forEach(c => { sc = Scorecard.addCriterion(sc, 'niceToHaves', c.text, c.weight); });
+        rubric.dealbreakers.forEach(c => { sc = Scorecard.addCriterion(sc, 'dealbreakers', c.text, 1); });
+
+        this.renderEdit(sc);
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        go.disabled = false;
+      }
+    });
+
+    [nameInput, jdInput, go].forEach(el => this.container.appendChild(el));
+  },
+
+  renderEdit(scorecard) {
+    this.current = scorecard;
+    this.container.textContent = '';
+
+    const note = document.createElement('p');
+    note.className = 'hint';
+    note.textContent = 'Claude drafted this from the job description. Correct it before scoring — auto-derived rubrics over-weight boilerplate.';
+    this.container.appendChild(note);
+
+    const buckets = [
+      ['mustHaves', 'Must have'],
+      ['niceToHaves', 'Nice to have'],
+      ['dealbreakers', 'Dealbreakers']
+    ];
+
+    buckets.forEach(([bucket, label]) => {
+      const h = document.createElement('h3');
+      h.textContent = label;
+      this.container.appendChild(h);
+
+      scorecard[bucket].forEach(c => {
+        const row = document.createElement('div');
+        row.className = 'criterion-row';
+
+        const input = document.createElement('input');
+        input.className = 'form-input';
+        input.value = c.text;
+        input.addEventListener('input', () => { c.text = input.value; });
+        row.appendChild(input);
+
+        const del = document.createElement('button');
+        del.className = 'btn btn-danger';
+        del.textContent = 'Remove';
+        del.addEventListener('click', () => {
+          this.current[bucket] = this.current[bucket].filter(x => x.id !== c.id);
+          this.renderEdit(this.current);
+        });
+        row.appendChild(del);
+
+        this.container.appendChild(row);
+      });
+
+      const add = document.createElement('button');
+      add.className = 'btn';
+      add.textContent = `Add ${label.toLowerCase()}`;
+      add.addEventListener('click', () => {
+        this.current = Scorecard.addCriterion(this.current, bucket, '', 1);
+        this.renderEdit(this.current);
+      });
+      this.container.appendChild(add);
+    });
+
+    const save = document.createElement('button');
+    save.className = 'btn btn-primary';
+    save.textContent = 'Save scorecard';
+    save.addEventListener('click', async () => {
+      const cleaned = { ...this.current, editedAt: new Date().toISOString() };
+      ['mustHaves', 'niceToHaves', 'dealbreakers'].forEach(b => {
+        cleaned[b] = cleaned[b].filter(c => c.text.trim() !== '');
+      });
+      if (cleaned.mustHaves.length === 0) {
+        showToast('Add at least one must-have before saving', 'error');
+        return;
+      }
+      await Storage.saveScorecard(cleaned);
+      showToast('Scorecard saved', 'success');
+      this.renderList();
+    });
+    this.container.appendChild(save);
+  }
+};
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = Scorecard;
 }

@@ -111,6 +111,9 @@ function initializeTab(tabId) {
     case 'questions':
       initQuestions();
       break;
+    case 'scorecards':
+      ScorecardUI.init();
+      break;
   }
 }
 
