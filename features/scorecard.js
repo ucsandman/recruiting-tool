@@ -247,6 +247,22 @@ const ScorecardUI = {
         input.addEventListener('input', () => { c.text = input.value; });
         row.appendChild(input);
 
+        // Dealbreakers carry no weight in the scoring model - only
+        // must-haves and nice-to-haves do.
+        if (bucket !== 'dealbreakers') {
+          const weightSelect = document.createElement('select');
+          weightSelect.className = 'form-input';
+          [[1, '1 - minor'], [2, '2 - important'], [3, '3 - critical']].forEach(([value, label]) => {
+            const opt = document.createElement('option');
+            opt.value = String(value);
+            opt.textContent = label;
+            weightSelect.appendChild(opt);
+          });
+          weightSelect.value = String(clampWeight(c.weight));
+          weightSelect.addEventListener('change', () => { c.weight = clampWeight(weightSelect.value); });
+          row.appendChild(weightSelect);
+        }
+
         const del = document.createElement('button');
         del.className = 'btn btn-danger';
         del.textContent = 'Remove';
@@ -263,7 +279,10 @@ const ScorecardUI = {
       add.className = 'btn';
       add.textContent = `Add ${label.toLowerCase()}`;
       add.addEventListener('click', () => {
-        this.current = Scorecard.addCriterion(this.current, bucket, '', 1);
+        // Someone hand-adding a must-have means it matters - default it to
+        // the highest weight rather than the lowest.
+        const defaultWeight = bucket === 'mustHaves' ? 3 : 1;
+        this.current = Scorecard.addCriterion(this.current, bucket, '', defaultWeight);
         this.renderEdit(this.current);
       });
       this.container.appendChild(add);

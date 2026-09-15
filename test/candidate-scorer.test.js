@@ -376,3 +376,75 @@ test('a forged delimiter split across two adjacent candidate fields is neutralis
   const countMarkers = p => (p.match(/<<<CANDIDATE_DATA_END>>>/gi) || []).length;
   assert.strictEqual(countMarkers(forged), countMarkers(clean));
 });
+
+// --- Fix round 3: unmet evidence gets the same verification as met evidence,
+// and a percentage built from zero decided must-haves is insufficient-data ---
+
+test('an unmet verdict with fabricated evidence not present in the profile downgrades to unknown', () => {
+  const raw = JSON.stringify([{
+    candidateId: 'c1',
+    lines: [{ criterionId: 'cr_1', verdict: 'unmet', evidence: 'Never touched a computer before' }]
+  }]);
+  const [score] = CandidateScorer.parseResponse(raw, SCORECARD, [CANDIDATE]);
+  assert.strictEqual(score.lines[0].verdict, 'unknown');
+});
+
+test('an unmet verdict with degenerate evidence (single character or punctuation) downgrades to unknown', () => {
+  const raw = JSON.stringify([{
+    candidateId: 'c1',
+    lines: [
+      { criterionId: 'cr_1', verdict: 'unmet', evidence: '.' },
+      { criterionId: 'cr_2', verdict: 'unmet', evidence: 'e' }
+    ]
+  }]);
+  const [score] = CandidateScorer.parseResponse(raw, SCORECARD);
+  score.lines.forEach(l => assert.strictEqual(l.verdict, 'unknown'));
+});
+
+test('an unmet verdict with a real quote from the profile stays unmet', () => {
+  const raw = JSON.stringify([{
+    candidateId: 'c1',
+    lines: [{ criterionId: 'cr_2', verdict: 'unmet', evidence: 'Built systems in Go for six years.' }]
+  }]);
+  const [score] = CandidateScorer.parseResponse(raw, SCORECARD, [CANDIDATE]);
+  assert.strictEqual(score.lines[0].verdict, 'unmet');
+});
+
+test('all must-haves unknown plus all nice-to-haves met yields insufficient-data, not strong', () => {
+  const raw = JSON.stringify([{
+    candidateId: 'c1',
+    lines: [
+      { criterionId: 'cr_1', verdict: 'unknown', evidence: null },
+      { criterionId: 'cr_2', verdict: 'unknown', evidence: null },
+      { criterionId: 'cr_3', verdict: 'met', evidence: 'Kubernetes' }
+    ]
+  }]);
+  const [score] = CandidateScorer.parseResponse(raw, SCORECARD);
+  assert.strictEqual(score.total, 100);
+  assert.strictEqual(score.recommendation, 'insufficient-data');
+});
+
+test('some must-haves decided still honours the normal thresholds', () => {
+  const raw = JSON.stringify([{
+    candidateId: 'c1',
+    lines: [
+      { criterionId: 'cr_1', verdict: 'unmet', evidence: 'Explicitly listed as an intern-level role' },
+      { criterionId: 'cr_2', verdict: 'met', evidence: 'Six years professional experience' },
+      { criterionId: 'cr_3', verdict: 'unknown', evidence: null }
+    ]
+  }]);
+  const [score] = CandidateScorer.parseResponse(raw, SCORECARD);
+  assert.strictEqual(score.total, 40); // 2 of (3 + 2)
+  assert.strictEqual(score.recommendation, 'weak');
+});
+
+test('the must-have-specific undecidable count is reported correctly', () => {
+  const lines = [
+    { criterionId: 'cr_1', verdict: 'unknown', evidence: null },
+    { criterionId: 'cr_2', verdict: 'unknown', evidence: null },
+    { criterionId: 'cr_3', verdict: 'unknown', evidence: null }
+  ];
+  const { unknownCount, mustHaveUnknownCount } = CandidateScorer.scoreTotal(lines, SCORECARD);
+  assert.strictEqual(unknownCount, 3);
+  assert.strictEqual(mustHaveUnknownCount, 2);
+});

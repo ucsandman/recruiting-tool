@@ -3,13 +3,14 @@
  * Scores many candidates against one scorecard in a single Claude request.
  *
  * Rules that make the output trustworthy:
- *  - every "met" carries verbatim evidence from the candidate's own profile,
- *    and that evidence is checked against the profile text when available
+ *  - every "met" and "unmet" carries verbatim evidence from the candidate's
+ *    own profile, and that evidence is checked against the profile text
+ *    when available
  *  - absence of evidence downgrades BOTH "met" and "unmet" to "unknown" -
  *    a contradiction with nothing to quote is not a contradiction, and a
  *    missing mention is not a failure
- *  - a "met" quote must be substantive - a single character or bare
- *    punctuation trivially occurs in any profile and proves nothing
+ *  - a "met" or "unmet" quote must be substantive - a single character or
+ *    bare punctuation trivially occurs in any profile and proves nothing
  *  - "unknown" is excluded from the scoring denominator entirely; a total
  *    of zero decidable criteria reports null, never 0%
  *  - dealbreakers are reported separately via dealbreakerHit, never folded
@@ -118,6 +119,13 @@ function mergeDuplicateGroup(groupLines) {
 }
 
 const CandidateScorer = {
+  // Exposed so other call sites consuming the same untrusted candidate text
+  // (e.g. the profile summarizer's prompt) share this single sanitizer and
+  // the same delimiter tokens rather than reimplementing either.
+  sanitizeText,
+  DATA_START,
+  DATA_END,
+
   buildPrompt(candidates, scorecard) {
     const criteria = [
       ...scorecard.mustHaves.map(c => ({ ...c, bucket: 'must-have' })),
@@ -183,6 +191,7 @@ const CandidateScorer = {
    * parseResponse.
    */
   scoreTotal(lines, scorecard) {
+    const mustHaveIds = new Set(scorecard.mustHaves.map(c => c.id));
     const weights = new Map();
     [...scorecard.mustHaves, ...scorecard.niceToHaves]
       .forEach(c => weights.set(c.id, clampWeight(c.weight)));
@@ -190,18 +199,26 @@ const CandidateScorer = {
     let met = 0;
     let decidable = 0;
     let unknownCount = 0;
+    let mustHaveUnknownCount = 0;
+    let mustHaveDecidedCount = 0;
 
     lines.forEach(line => {
       if (!weights.has(line.criterionId)) return; // dealbreaker or unknown id
       const weight = weights.get(line.criterionId);
       const verdict = normalizeVerdict(line.verdict);
-      if (verdict === 'unknown') { unknownCount += 1; return; }
+      const isMustHave = mustHaveIds.has(line.criterionId);
+      if (verdict === 'unknown') {
+        unknownCount += 1;
+        if (isMustHave) mustHaveUnknownCount += 1;
+        return;
+      }
       decidable += weight;
+      if (isMustHave) mustHaveDecidedCount += 1;
       if (verdict === 'met') met += weight;
     });
 
     const total = decidable === 0 ? null : Math.round((met / decidable) * 100);
-    return { total, unknownCount };
+    return { total, unknownCount, mustHaveUnknownCount, mustHaveDecidedCount };
   },
 
   /**
@@ -262,16 +279,19 @@ const CandidateScorer = {
               verdict = 'unknown';
             }
 
-            if (verdict === 'met' && evidence) {
+            if ((verdict === 'met' || verdict === 'unmet') && evidence) {
               // A one-character or punctuation-only "quote" proves nothing -
-              // it occurs in almost any text - so it can't support "met".
+              // it occurs in almost any text - so it can't support "met" OR
+              // "unmet". An "unmet" is a claim that the profile CONTRADICTS
+              // the criterion; a contradiction resting on a degenerate quote
+              // is no more real than a degenerate "met".
               if (!isSubstantiveEvidence(evidence)) {
                 verdict = 'unknown';
                 evidence = null;
               } else if (searchable) {
-                // A surviving "met" must be checked against the candidate's
-                // own profile text when we have it, so a fabricated quote
-                // can't stand as evidence.
+                // A surviving "met" or "unmet" must be checked against the
+                // candidate's own profile text when we have it, so a
+                // fabricated quote can't stand as evidence either way.
                 const needle = normalizeForCompare(evidence);
                 if (!searchable.includes(needle)) {
                   verdict = 'unknown';
@@ -292,11 +312,17 @@ const CandidateScorer = {
         const lines = Array.from(groups.values()).map(mergeDuplicateGroup);
 
         const hit = lines.find(l => dealbreakerIds.has(l.criterionId) && l.verdict === 'met');
-        const { total, unknownCount } = this.scoreTotal(lines, scorecard);
+        const { total, unknownCount, mustHaveUnknownCount, mustHaveDecidedCount } =
+          this.scoreTotal(lines, scorecard);
 
+        // A percentage built from zero decided must-haves is meaningless -
+        // it can hit 100% on nice-to-haves alone while none of the role's
+        // actual requirements were ever checked. That is insufficient data,
+        // never "strong", no matter what the nice-to-haves scored.
         let recommendation;
         if (hit) recommendation = 'weak';
         else if (total === null) recommendation = 'insufficient-data';
+        else if (mustHaveDecidedCount === 0) recommendation = 'insufficient-data';
         else if (total >= 75) recommendation = 'strong';
         else if (total >= 45) recommendation = 'possible';
         else recommendation = 'weak';
@@ -308,7 +334,8 @@ const CandidateScorer = {
           recommendation,
           lines,
           dealbreakerHit: hit ? hit.criterionId : null,
-          unknownCount
+          unknownCount,
+          mustHaveUnknownCount
         };
       });
   }
