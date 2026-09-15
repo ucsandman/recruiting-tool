@@ -96,10 +96,19 @@ const Signals = {
     if (!profileData || typeof profileData !== 'object') return closed;
 
     // Recruiter spotlight wins: it is the stronger, intent-declared signal.
+    // Matches either the stable machine token ("openToOpportunities") or the
+    // anchored human label ("Open to work"), never a loose substring — a
+    // spotlight entry that merely mentions the phrase must not fire.
     const spotlights = Array.isArray(profileData.recruiterSpotlights)
       ? profileData.recruiterSpotlights
       : [];
-    if (spotlights.some(s => typeof s === 'string' && /open to work/i.test(s))) {
+    const isSpotlightMatch = s => {
+      if (typeof s !== 'string') return false;
+      const trimmed = s.trim();
+      if (trimmed.toLowerCase() === 'opentoopportunities') return true;
+      return /^#?open\s+to\s+work$/i.test(trimmed);
+    };
+    if (spotlights.some(isSpotlightMatch)) {
       return { open: true, source: 'recruiter-spotlight', seenAt: now.toISOString() };
     }
 

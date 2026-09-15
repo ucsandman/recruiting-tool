@@ -42,3 +42,48 @@ test('tolerates a missing or malformed profile object', () => {
   assert.strictEqual(Signals.detectOpenToWork({}, NOW).open, false);
   assert.strictEqual(Signals.detectOpenToWork({ topCardText: 123 }, NOW).open, false);
 });
+
+test('spotlight fires on the exact machine token', () => {
+  const r = Signals.detectOpenToWork({ recruiterSpotlights: ['openToOpportunities'] }, NOW);
+  assert.strictEqual(r.open, true);
+  assert.strictEqual(r.source, 'recruiter-spotlight');
+});
+
+test('spotlight machine token match is case-insensitive', () => {
+  const r = Signals.detectOpenToWork({ recruiterSpotlights: ['OpenToOpportunities'] }, NOW);
+  assert.strictEqual(r.open, true);
+  assert.strictEqual(r.source, 'recruiter-spotlight');
+});
+
+test('spotlight fires on the human label', () => {
+  const r = Signals.detectOpenToWork({ recruiterSpotlights: ['Open to work'] }, NOW);
+  assert.strictEqual(r.open, true);
+  assert.strictEqual(r.source, 'recruiter-spotlight');
+});
+
+test('spotlight ignores unrelated Recruiter decoration types', () => {
+  const r = Signals.detectOpenToWork({
+    recruiterSpotlights: ['skillsV2', 'views', 'connections']
+  }, NOW);
+  assert.strictEqual(r.open, false);
+});
+
+test('spotlight does not fire on a candidate who is hiring rather than looking', () => {
+  const r = Signals.detectOpenToWork({
+    recruiterSpotlights: ['we are open to work with partners']
+  }, NOW);
+  assert.strictEqual(r.open, false);
+});
+
+test('spotlight does not loosely match a token that merely contains the phrase', () => {
+  const r = Signals.detectOpenToWork({ recruiterSpotlights: ['notOpenToOpportunities'] }, NOW);
+  assert.strictEqual(r.open, false);
+});
+
+test('spotlight tolerates a non-string entry mixed with a valid one', () => {
+  const r = Signals.detectOpenToWork({
+    recruiterSpotlights: [42, 'openToOpportunities']
+  }, NOW);
+  assert.strictEqual(r.open, true);
+  assert.strictEqual(r.source, 'recruiter-spotlight');
+});
