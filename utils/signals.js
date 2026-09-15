@@ -48,6 +48,43 @@ const Signals = {
     return { start, end, months, isCurrent };
   },
 
+  /**
+   * Advisory movability label. Not a filter: the recruiter decides.
+   * @param {number} months from parseTenure
+   */
+  tenureBand(months) {
+    if (typeof months !== 'number' || !Number.isFinite(months) || months < 0) {
+      return 'unknown';
+    }
+    if (months < 6) return 'new';
+    if (months < 18) return 'settling';
+    if (months < 48) return 'prime';
+    return 'entrenched';
+  },
+
+  /**
+   * Compare a stored role snapshot against what a page just showed.
+   * @param {{title,company}|null} prev
+   * @param {{title,company}|null} next
+   */
+  diffRole(prev, next) {
+    const none = { changed: false, from: prev || null, to: next || null, kind: 'none' };
+    if (!prev || !next) return none;
+
+    const norm = v => (typeof v === 'string' ? v.trim().toLowerCase() : '');
+    const titleChanged = norm(prev.title) !== norm(next.title);
+    const companyChanged = norm(prev.company) !== norm(next.company);
+
+    if (!titleChanged && !companyChanged) return none;
+
+    let kind = 'none';
+    if (titleChanged && companyChanged) kind = 'both';
+    else if (companyChanged) kind = 'company-change';
+    else kind = 'title-change';
+
+    return { changed: true, from: prev, to: next, kind };
+  },
+
   /** "Jan 2023" -> {year:2023, month:1}; "2019" -> {year:2019, month:null} */
   _parsePoint(text) {
     if (typeof text !== 'string') return null;
