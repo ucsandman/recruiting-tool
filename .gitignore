@@ -8,3 +8,5 @@ __pycache__/
 
 # Recruiter DOM captures - contains real candidate PII, never commit
 dom-samples/
+linkedinfiles.zip
+*.zip

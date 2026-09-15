@@ -174,6 +174,12 @@ test('uses the explicit yr/mo summary when LinkedIn provides one', () => {
   assert.strictEqual(r.end, null);
 });
 
+test('accepts the bullet separator Recruiter uses', () => {
+  const r = Signals.parseTenure('Mar 2026 – Present • 7 mos', NOW);
+  assert.strictEqual(r.months, 7);
+  assert.strictEqual(r.isCurrent, true);
+});
+
 test('handles a months-only summary', () => {
   const r = Signals.parseTenure('Mar 2026 - Present · 5 mos', NOW);
   assert.strictEqual(r.months, 5);
@@ -245,7 +251,8 @@ const Signals = {
     const isCurrent = /\bpresent\b/i.test(text);
 
     // Split off the "· 2 yrs 3 mos" summary, if any.
-    const parts = text.split('·');
+    // Public site joins with a middot; Recruiter's profile view uses a bullet.
+    const parts = text.split(/[·•]/);
     const rangePart = parts[0].trim();
     const summaryPart = parts.length > 1 ? parts.slice(1).join('·').trim() : '';
 
@@ -313,7 +320,7 @@ if (typeof module !== 'undefined' && module.exports) {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npm test`
-Expected: PASS. 7 tests total (1 ban-safety + 6 tenure). Read the output and confirm no test was skipped.
+Expected: PASS. 8 tests total (1 ban-safety + 7 tenure). Read the output and confirm no test was skipped.
 
 - [ ] **Step 5: Commit**
 
@@ -461,7 +468,7 @@ In `utils/signals.js`, add these methods to the `Signals` object, after `parseTe
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npm test`
-Expected: PASS, 14 tests total. Read the output.
+Expected: PASS, 15 tests total. Read the output.
 
 - [ ] **Step 5: Commit**
 
@@ -583,7 +590,7 @@ In `utils/signals.js`, add to the `Signals` object:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npm test`
-Expected: PASS, 20 tests total.
+Expected: PASS, 21 tests total.
 
 - [ ] **Step 5: Commit**
 
@@ -753,7 +760,7 @@ Add matching styles to `popup/popup.css`:
 - [ ] **Step 6: Run tests**
 
 Run: `npm test`
-Expected: PASS, 22 tests. The ban-safety guard must still pass with the modified
+Expected: PASS, 23 tests. The ban-safety guard must still pass with the modified
 extractor — confirm it scanned the file by checking no violation is reported.
 
 - [ ] **Step 7: Verify in the real extension**
@@ -896,7 +903,7 @@ Also forward the model through the message handler, changing the `callClaude` br
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npm test`
-Expected: PASS, 24 tests.
+Expected: PASS, 25 tests.
 
 - [ ] **Step 5: Verify the extension still calls the API**
 
@@ -1081,7 +1088,7 @@ In `utils/storage.js`, add these helpers to the `Storage` object, after the cand
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npm test`
-Expected: PASS, 30 tests.
+Expected: PASS, 31 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -1238,7 +1245,7 @@ Add to `features/scorecard.js`, inside the `Scorecard` object:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npm test`
-Expected: PASS, 37 tests.
+Expected: PASS, 38 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -1504,7 +1511,7 @@ Add styles to `popup/popup.css`:
 - [ ] **Step 4: Run tests**
 
 Run: `npm test`
-Expected: PASS, 37 tests. No new unit tests here — this task is UI wiring over
+Expected: PASS, 38 tests. No new unit tests here — this task is UI wiring over
 already-tested logic.
 
 - [ ] **Step 5: Verify in the real extension**
@@ -1807,7 +1814,7 @@ if (typeof module !== 'undefined' && module.exports) {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npm test`
-Expected: PASS, 45 tests.
+Expected: PASS, 46 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -1992,7 +1999,7 @@ Add styles to `popup/popup.css`:
 - [ ] **Step 3: Run tests**
 
 Run: `npm test`
-Expected: PASS, 45 tests.
+Expected: PASS, 46 tests.
 
 - [ ] **Step 4: Verify the whole Phase 1-3 flow end to end**
 
