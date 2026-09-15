@@ -186,15 +186,55 @@ function parseSimpleListFromText(section, headerText) {
 
 /**
  * Raw text of the profile top card, used for badge detection.
- * The top card is the first section and carries no header, so it is
- * located positionally rather than by header text.
+ * LinkedIn wraps the entire profile (About, Featured, Activity, etc.) in an
+ * outer <section> under <main>, so `main.querySelector('section')` returns
+ * that wrapper, not the top card. The real top card is the SMALLEST section
+ * under <main> whose first non-empty line equals the profile's name.
  */
 function extractTopCardText() {
   const main = document.querySelector('main');
   if (!main) return '';
-  const firstSection = main.querySelector('section');
-  if (!firstSection) return '';
-  return (firstSection.innerText || '').trim();
+
+  const sections = Array.from(main.querySelectorAll('section'));
+  if (sections.length === 0) return '';
+
+  const name = extractName();
+  if (name) {
+    const candidates = sections
+      .map(section => (section.innerText || '').trim())
+      .filter(text => {
+        const firstLine = text.split('\n').map(l => l.trim()).find(l => l.length > 0) || '';
+        return firstLine === name;
+      });
+
+    if (candidates.length > 0) {
+      candidates.sort((a, b) => a.length - b.length);
+      return candidates[0];
+    }
+  }
+
+  // Fallback: name extraction failed or LinkedIn changed. Never return the
+  // whole profile - cap at 40 lines to keep prompts small and the badge
+  // detection surface narrow.
+  const fallbackText = (sections[0].innerText || '').trim();
+  return fallbackText.split('\n').slice(0, 40).join('\n');
+}
+
+/**
+ * Whether any aria-label under <main> carries the open-to-work signal.
+ * LinkedIn renders this as e.g. "View <Name>'s profile, open to work" or
+ * "<Name>, Open to work Verified Profile You" - the distinguishing shape is
+ * a comma followed by "open to work" as a word.
+ */
+function extractOpenToWorkAria() {
+  const main = document.querySelector('main');
+  if (!main) return false;
+  const elements = main.querySelectorAll('[aria-label]');
+  for (const el of elements) {
+    const label = el.getAttribute('aria-label') || '';
+    if (/,\s*open\s*to\s*work\b/i.test(label)) return true;
+  }
+  return false;
 }
 
 /**
@@ -216,6 +256,7 @@ function extractProfileData() {
     profileUrl: window.location.href.split('?')[0],
     profileImageUrl: extractProfileImage(),
     topCardText: extractTopCardText(),
+    openToWorkAria: extractOpenToWorkAria(),
     about: extractAbout(),
     currentRole: extractCurrentRole(),
     experience: extractExperience(),

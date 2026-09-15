@@ -24,3 +24,17 @@ test('an unparseable duration surfaces as unknown, not as a zero-month tenure', 
   assert.strictEqual(tenure, null);
   assert.strictEqual(Signals.tenureBand(tenure && tenure.months), 'unknown');
 });
+
+// Real-world topCardText carries the separator suffix LinkedIn appends
+// ("Open to work · Everyone on LinkedIn"), not the bare phrase.
+test('a topCardText with the real separator-suffixed badge line flows through detection', () => {
+  const profile = {
+    topCardText: 'Dana Reyes\nSenior Engineer at Acme\nOpen to work · Everyone on LinkedIn'
+  };
+  const now = new Date('2026-09-14T00:00:00Z');
+
+  const otw = Signals.detectOpenToWork(profile, now);
+
+  assert.strictEqual(otw.open, true);
+  assert.strictEqual(otw.source, 'public-badge');
+});

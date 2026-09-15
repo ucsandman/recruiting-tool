@@ -87,3 +87,53 @@ test('spotlight tolerates a non-string entry mixed with a valid one', () => {
   assert.strictEqual(r.open, true);
   assert.strictEqual(r.source, 'recruiter-spotlight');
 });
+
+test('detects the real-world badge line with its separator suffix', () => {
+  const r = Signals.detectOpenToWork({
+    topCardText: 'Dana Reyes\nSenior Engineer at Acme\nOpen to work · Everyone on LinkedIn'
+  }, NOW);
+  assert.strictEqual(r.open, true);
+  assert.strictEqual(r.source, 'public-badge');
+});
+
+test('detects the hashtag form', () => {
+  const r = Signals.detectOpenToWork({ topCardText: '#OpenToWork' }, NOW);
+  assert.strictEqual(r.open, true);
+  assert.strictEqual(r.source, 'public-badge');
+});
+
+test('detects the badge line with a "Recruiters only" separator suffix', () => {
+  const r = Signals.detectOpenToWork({ topCardText: 'open to work · Recruiters only' }, NOW);
+  assert.strictEqual(r.open, true);
+  assert.strictEqual(r.source, 'public-badge');
+});
+
+test('does not false-positive on badge-adjacent phrases', () => {
+  const strings = [
+    'we are open to work with partners',
+    'Hiring',
+    'Open to work with partners on integrations',
+    'notOpenToOpportunities',
+    'Opentowork Industries'
+  ];
+  for (const line of strings) {
+    const r = Signals.detectOpenToWork({ topCardText: line }, NOW);
+    assert.strictEqual(r.open, false, `expected "${line}" not to detect`);
+  }
+});
+
+test('detects openToWorkAria alone', () => {
+  const r = Signals.detectOpenToWork({ topCardText: '', openToWorkAria: true }, NOW);
+  assert.strictEqual(r.open, true);
+  assert.strictEqual(r.source, 'public-badge');
+});
+
+test('recruiter spotlight still beats openToWorkAria', () => {
+  const r = Signals.detectOpenToWork({
+    topCardText: '',
+    openToWorkAria: true,
+    recruiterSpotlights: ['openToOpportunities']
+  }, NOW);
+  assert.strictEqual(r.open, true);
+  assert.strictEqual(r.source, 'recruiter-spotlight');
+});

@@ -113,10 +113,12 @@ const Signals = {
     }
 
     const topCard = typeof profileData.topCardText === 'string' ? profileData.topCardText : '';
-    // Match the badge phrase as its own line. A profile that merely contains the
-    // words ("open to work with partners") must not fire.
-    const badge = topCard.split('\n').some(line => /^\s*#?open\s+to\s+work\s*$/i.test(line));
-    if (badge) {
+    // Match the badge phrase as its own line, allowing a trailing separator
+    // clause LinkedIn appends (e.g. "Open to work · Everyone on LinkedIn").
+    // A profile that merely contains the words ("open to work with partners")
+    // must not fire.
+    const badge = topCard.split('\n').some(line => /^\s*#?\s*open\s*to\s*work\s*(?:[·•|–-]\s*.*)?$/i.test(line));
+    if (badge || profileData.openToWorkAria === true) {
       return { open: true, source: 'public-badge', seenAt: now.toISOString() };
     }
 
