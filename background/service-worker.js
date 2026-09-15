@@ -3,10 +3,12 @@
  * Handles API calls and message passing
  */
 
+importScripts('/lib/claude-api.js');
+
 // Handle messages from popup and content scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'callClaude') {
-    handleClaudeCall(request.prompt, request.apiKey, request.maxTokens)
+    handleClaudeCall(request.prompt, request.apiKey, request.maxTokens, request.model)
       .then(response => sendResponse({ success: true, data: response }))
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true; // Required for async response
@@ -35,38 +37,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 /**
- * Make a call to Claude API
+ * Make a call to Claude API. The request itself lives in lib/claude-api.js
+ * so there is exactly one place the model id and headers are set.
  */
-async function handleClaudeCall(prompt, apiKey, maxTokens = 1024) {
-  if (!apiKey) {
-    throw new Error('Please add your Claude API key in settings');
-  }
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: maxTokens,
-      messages: [
-        { role: 'user', content: prompt }
-      ]
-    })
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    const message = error.error?.message || `API call failed with status ${response.status}`;
-    throw new Error(message);
-  }
-
-  const data = await response.json();
-  return data.content[0].text;
+async function handleClaudeCall(prompt, apiKey, maxTokens = 1024, model) {
+  return callClaude(prompt, apiKey, maxTokens, model);
 }
 
 // Extension installation handler
