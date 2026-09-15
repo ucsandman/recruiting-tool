@@ -98,3 +98,168 @@ test('lines referring to unknown criterion ids are discarded', () => {
 test('throws a descriptive error on unparseable output', () => {
   assert.throws(() => CandidateScorer.parseResponse('not json', SCORECARD), /could not read/i);
 });
+
+// --- Fix round 1: symmetric evidence backstop, verdict normalization,
+// dedup, weight guard, prompt injection defense, source-checked evidence ---
+
+const CANDIDATE = {
+  id: 'c1',
+  name: 'Dana Reyes',
+  headline: 'Senior Backend Engineer',
+  about: 'Built systems in Go for six years.',
+  experience: [{ title: 'Backend Engineer', company: 'Acme', duration: '6 yrs' }],
+  skills: ['Go', 'Kubernetes']
+};
+
+test('an unmet verdict with no evidence is downgraded to unknown', () => {
+  const raw = JSON.stringify([{
+    candidateId: 'c1',
+    lines: [
+      { criterionId: 'cr_1', verdict: 'met', evidence: 'x' },
+      { criterionId: 'cr_2', verdict: 'unmet', evidence: null }
+    ]
+  }]);
+  const [score] = CandidateScorer.parseResponse(raw, SCORECARD);
+  const cr2 = score.lines.find(l => l.criterionId === 'cr_2');
+  assert.strictEqual(cr2.verdict, 'unknown');
+});
+
+test('a verdict of "Met" with evidence is honoured as met', () => {
+  const raw = JSON.stringify([{
+    candidateId: 'c1',
+    lines: [{ criterionId: 'cr_1', verdict: 'Met', evidence: 'x' }]
+  }]);
+  const [score] = CandidateScorer.parseResponse(raw, SCORECARD);
+  assert.strictEqual(score.lines[0].verdict, 'met');
+});
+
+test('a verdict of "Met" on a dealbreaker is detected', () => {
+  const raw = JSON.stringify([{
+    candidateId: 'c1',
+    lines: [
+      { criterionId: 'cr_1', verdict: 'met', evidence: 'x' },
+      { criterionId: 'cr_4', verdict: 'Met', evidence: 'Requires H-1B sponsorship' }
+    ]
+  }]);
+  const [score] = CandidateScorer.parseResponse(raw, SCORECARD);
+  assert.strictEqual(score.dealbreakerHit, 'cr_4');
+});
+
+test('an unrecognised verdict becomes unknown', () => {
+  const raw = JSON.stringify([{
+    candidateId: 'c1',
+    lines: [{ criterionId: 'cr_1', verdict: 'maybe', evidence: 'x' }]
+  }]);
+  const [score] = CandidateScorer.parseResponse(raw, SCORECARD);
+  assert.strictEqual(score.lines[0].verdict, 'unknown');
+});
+
+test('duplicate criterionId lines with agreeing verdicts count once', () => {
+  const raw = JSON.stringify([{
+    candidateId: 'c1',
+    lines: [
+      { criterionId: 'cr_1', verdict: 'met', evidence: 'x' },
+      { criterionId: 'cr_1', verdict: 'met', evidence: 'y' }
+    ]
+  }]);
+  const [score] = CandidateScorer.parseResponse(raw, SCORECARD);
+  const cr1Lines = score.lines.filter(l => l.criterionId === 'cr_1');
+  assert.strictEqual(cr1Lines.length, 1);
+  assert.strictEqual(cr1Lines[0].verdict, 'met');
+});
+
+test('duplicate criterionId lines with disagreeing verdicts become unknown', () => {
+  const raw = JSON.stringify([{
+    candidateId: 'c1',
+    lines: [
+      { criterionId: 'cr_1', verdict: 'met', evidence: 'x' },
+      { criterionId: 'cr_1', verdict: 'unmet', evidence: 'z' }
+    ]
+  }]);
+  const [score] = CandidateScorer.parseResponse(raw, SCORECARD);
+  const cr1Lines = score.lines.filter(l => l.criterionId === 'cr_1');
+  assert.strictEqual(cr1Lines.length, 1);
+  assert.strictEqual(cr1Lines[0].verdict, 'unknown');
+});
+
+test('a string weight and a zero weight both behave as 1', () => {
+  const weightScorecard = {
+    id: 'sc_2',
+    roleName: 'Test',
+    mustHaves: [
+      { id: 'w1', text: 'A', weight: 'not-a-number' },
+      { id: 'w2', text: 'B', weight: 0 }
+    ],
+    niceToHaves: [],
+    dealbreakers: [],
+    editedAt: '2026-09-14T00:00:00Z'
+  };
+  const lines = [
+    { criterionId: 'w1', verdict: 'met', evidence: 'x' },
+    { criterionId: 'w2', verdict: 'met', evidence: 'y' }
+  ];
+  const { total } = CandidateScorer.scoreTotal(lines, weightScorecard);
+  assert.strictEqual(total, 100);
+});
+
+test('a fabricated evidence quote not present in the profile downgrades to unknown', () => {
+  const raw = JSON.stringify([{
+    candidateId: 'c1',
+    lines: [{ criterionId: 'cr_1', verdict: 'met', evidence: 'Never worked with Go at all' }]
+  }]);
+  const [score] = CandidateScorer.parseResponse(raw, SCORECARD, [CANDIDATE]);
+  assert.strictEqual(score.lines[0].verdict, 'unknown');
+});
+
+test('a real quote present in the profile survives', () => {
+  const raw = JSON.stringify([{
+    candidateId: 'c1',
+    lines: [{ criterionId: 'cr_1', verdict: 'met', evidence: 'Built systems in Go for six years.' }]
+  }]);
+  const [score] = CandidateScorer.parseResponse(raw, SCORECARD, [CANDIDATE]);
+  assert.strictEqual(score.lines[0].verdict, 'met');
+});
+
+test('parseResponse without candidates still applies every other rule', () => {
+  const raw = JSON.stringify([{
+    candidateId: 'c1',
+    lines: [{ criterionId: 'cr_1', verdict: 'Met', evidence: 'fabricated, unverifiable text' }]
+  }]);
+  const [score] = CandidateScorer.parseResponse(raw, SCORECARD);
+  assert.strictEqual(score.lines[0].verdict, 'met');
+});
+
+test('a total of null yields recommendation insufficient-data', () => {
+  const raw = JSON.stringify([{
+    candidateId: 'c1',
+    lines: [
+      { criterionId: 'cr_1', verdict: 'unknown', evidence: null },
+      { criterionId: 'cr_2', verdict: 'unknown', evidence: null },
+      { criterionId: 'cr_3', verdict: 'unknown', evidence: null }
+    ]
+  }]);
+  const [score] = CandidateScorer.parseResponse(raw, SCORECARD);
+  assert.strictEqual(score.total, null);
+  assert.strictEqual(score.recommendation, 'insufficient-data');
+});
+
+test('an entry missing candidateId is skipped', () => {
+  const raw = JSON.stringify([
+    { lines: [{ criterionId: 'cr_1', verdict: 'met', evidence: 'x' }] },
+    { candidateId: 'c1', lines: [{ criterionId: 'cr_1', verdict: 'met', evidence: 'x' }] }
+  ]);
+  const scores = CandidateScorer.parseResponse(raw, SCORECARD);
+  assert.strictEqual(scores.length, 1);
+  assert.strictEqual(scores[0].candidateId, 'c1');
+});
+
+test('a null array entry does not throw a raw TypeError', () => {
+  const raw = JSON.stringify([
+    null,
+    { candidateId: 'c1', lines: [{ criterionId: 'cr_1', verdict: 'met', evidence: 'x' }] }
+  ]);
+  assert.doesNotThrow(() => CandidateScorer.parseResponse(raw, SCORECARD));
+  const scores = CandidateScorer.parseResponse(raw, SCORECARD);
+  assert.strictEqual(scores.length, 1);
+  assert.strictEqual(scores[0].candidateId, 'c1');
+});
